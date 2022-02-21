@@ -1,51 +1,22 @@
 #include "window.h"
+#include "util.h"
 
-void flat_top_window(double *s, size_t n, size_t stride)
+#include <math.h>
+
+void init_window_table(win_table_t *tbl, win_type_t type, size_t size)
 {
+  tbl->size = size;
+  tbl->coherent_gain = 0.;
 
+  tbl->factors = aligned_malloc(size * sizeof(double));
+  for (size_t i = 0; i < size; ++i)
+    tbl->factors[i] = 0.;
 }
 
-void flat_top_window_cx(fftw_complex *s, size_t n, size_t stride)
+void destroy_window_table(win_table_t *tbl)
 {
-
-}
-
-void han_window(double *s, size_t n, size_t stride)
-{
-
-}
-
-void han_window_cx(fftw_complex *s, size_t n, size_t stride)
-{
-
-}
-
-void blackman_window(double *s, size_t n, size_t stride)
-{
-
-}
-
-void blackman_window_cx(fftw_complex *s, size_t n, size_t stride)
-{
-
-}
-
-void blackman_harris_window(double *s, size_t n, size_t stride)
-{
-
-}
-
-void blackman_harris_window_cx(fftw_complex *s, size_t n, size_t stride)
-{
-
-}
-
-void scaled_window(win_type_t t, double *s, size_t n, size_t stride)
-{
-
-}
-
-void scaled_window_cx(win_type_t t, fftw_complex *s, size_t n, size_t stride)
-{
-
+  aligned_free(tbl->factors);
+  tbl->factors = NULL;
+  tbl->size = 0;
+  tbl->coherent_gain = 0.;
 }

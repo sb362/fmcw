@@ -1,7 +1,7 @@
 #ifndef WINDOW_H
 #define WINDOW_H
 
-#include <fftw3.h>
+#include <stdint.h>
 
 typedef enum
 {
@@ -12,17 +12,13 @@ typedef enum
   BLACKMAN_HARRIS_WINDOW
 } win_type_t;
 
-void        flat_top_window(double *s, size_t n, size_t stride);
-void             han_window(double *s, size_t n, size_t stride);
-void        blackman_window(double *s, size_t n, size_t stride);
-void blackman_harris_window(double *s, size_t n, size_t stride);
+typedef struct
+{
+  double coherent_gain, *factors;
+  size_t size;
+} win_table_t;
 
-void        flat_top_window_cx(fftw_complex *s, size_t n, size_t stride);
-void             han_window_cx(fftw_complex *s, size_t n, size_t stride);
-void        blackman_window_cx(fftw_complex *s, size_t n, size_t stride);
-void blackman_harris_window_cx(fftw_complex *s, size_t n, size_t stride);
-
-void scaled_window   (win_type_t t,       double *s, size_t n, size_t stride);
-void scaled_window_cx(win_type_t t, fftw_complex *s, size_t n, size_t stride);
+void init_window_table(win_table_t *tbl, win_type_t type, size_t size);
+void destroy_window_table(win_table_t *tbl)
 
 #endif // WINDOW_H

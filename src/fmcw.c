@@ -30,7 +30,8 @@ void fmcw_cpi_destroy(fmcw_cpi_t *cpi)
   aligned_free(cpi->range_doppler_dbm);
 }
 
-void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size, size_t cpi_size)
+void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
+                       size_t cpi_size, win_type_t win_type)
 {
   fmcw_cpi_init(&ctx->cpi, chirp_size, cpi_size);
 
@@ -72,9 +73,9 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size, size_t cpi_size)
     FFTW_MEASURE            // optimise plan by profiling several FFTs
   );
 
-  LOG(TRACE, "Done.");
-
-  ctx->win_type = NO_WINDOW;
+  LOG(TRACE, "Initialising window tables...");
+  init_window_table(&ctx->fast_win, win_type, ctx->cpi.chirp_size);
+  init_window_table(&ctx->slow_win, win_type, ctx->cpi.cpi_size);
 }
 
 void fmcw_context_destroy(fmcw_context_t *ctx)
@@ -82,6 +83,8 @@ void fmcw_context_destroy(fmcw_context_t *ctx)
   fftw_destroy_plan(ctx->fast_time);
   fftw_destroy_plan(ctx->slow_time);
   fmcw_cpi_destroy(&ctx->cpi);
+  destroy_window_table(&ctx->fast_win);
+  destroy_window_table(&ctx->slow_win);
 }
 
 void fmcw_process(fmcw_context_t *ctx)
@@ -90,22 +93,21 @@ void fmcw_process(fmcw_context_t *ctx)
 
   LOG(TRACE, "Fast-time windowing...");
   for (size_t chirp = 0; chirp < ctx->cpi.cpi_size; ++chirp)
-    scaled_window(ctx->win_type, ctx->cpi.volts, ctx->cpi.chirp_size, 1);
+    {}
   
   LOG(TRACE, "Fast-time FFT...");
   fftw_execute(ctx->fast_time);
 
   LOG(TRACE, "Slow-time windowing...");
-  for (size_t chirp = 0; chirp < ctx->cpi.n_bins; ++chirp)
-    scaled_window_cx(ctx->win_type, ctx->cpi.freq_spectrum,
-                     ctx->cpi.cpi_size, ctx->cpi.n_bins);
+  for (size_t bin = 0; bin < ctx->cpi.n_bins; ++bin)
+    {}
  
   LOG(TRACE, "Slow-time FFT...");
   fftw_execute(ctx->slow_time);
 
   // Fast-time corrections:
   //  -  coherentgain (window gain correction)
-  //  -  -3  dB
+  //  -  -3  dB       (peak-peak to RMS)
   //  -  +50 Ohm      (RF)
   //  -  +30          (dB -> dBm)
   //  -  +1/sqrt(N/2) (FFT is unnormalised)
