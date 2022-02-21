@@ -1,26 +1,33 @@
-CC      := clang
-SRCS    := src/main.c src/fmcw.c src/util.c src/window.c
-HDRS    := src/fmcw.h src/util.h src/window.h
+CC     := clang
+EXE    := fmcw.exe
+SRCS   := src/main.c src/fmcw.c src/util.c src/window.c
+HDRS   := src/fmcw.h src/util.h src/window.h
+LIBS   := -lfftw3 -lpthread
 
-CFLAGS  := -Iinclude/ -Isrc/ -std=c11 -Wall -Wextra -pedantic -Llib/ -pthread
-#CFLAGS += -g
-CFLAGS  += -O3 -flto
+CFLAGS := -Iinclude/ -Isrc/ -std=c11 -Wall -Wextra -pedantic -Llib/
+CFLAGS += -g
+#CFLAGS += -O3 -flto
+CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
 
 ifeq ($(OS),Windows_NT)
-	LIBS    := -lfftw3 -lpthread
-	DEFS    := -DWIN32_LEAN_AND_MEAN
+	DEFS   += -DWIN32_LEAN_AND_MEAN
 else
-	LIBS    := -lm -lfftw3 -lpthread
+	LIBS   += -lm
+	CFLAGS += -pthread
 endif
 
-OBJS    := $(addsuffix .o,$(basename $(SRCS)))
-DEPS    := $(OBJS:.o=.d)
-LDLIBS  := $(LIBS)
+OBJS   := $(addsuffix .o,$(basename $(SRCS)))
+DEPS   := $(OBJS:.o=.d)
+LDLIBS := $(LIBS)
 
 src/%.o: src/%.c
 
 %.o: %.c $(DEPS)
 	$(CC) -c $< -o $@ $(CFLAGS) $(DEFS) $(LIBS)
 
-fmcw.exe: $(OBJS) $(HDRS)
+$(EXE): $(OBJS) $(HDRS)
 	$(CC) $(OBJS) -o $@ $(CFLAGS) $(DEFS) $(LIBS) $(LDFLAGS)
+
+.PHONY: clean
+clean:
+	$(RM) $(OBJS) $(EXE)
