@@ -12,7 +12,7 @@
 #ifdef NDEBUG
 #define LOG_LEVEL FATAL
 #else
-#define LOG_LEVEL TRACE
+#define LOG_LEVEL DEBUG
 #endif
 #endif
 

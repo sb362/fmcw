@@ -31,14 +31,21 @@ double elapsed_milliseconds()
   return (double)(li.QuadPart - timer_start) / perf_freq;
 }
 #else
+#include <time.h>
+
+static double timer_start = 0.0;
+
 void timer_init()
 {
-  
+  timer_start = elapsed_milliseconds();
 }
 
 double elapsed_milliseconds()
 {
-  return 0.0;
+  struct timespec ts;
+  timespec_get(&ts, TIME_UTC);
+
+  return (ts.tv_sec * 1e3 + ts.tv_nsec * 1e-6) - timer_start;
 }
 #endif
 
