@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
                        ctx.cpi.buffer_size,
                        data)) > 0)
   {
-    for (int i = 0; i < ctx.cpi.buffer_size; ++i)
+    for (size_t i = 0; i < ctx.cpi.buffer_size; ++i)
       ctx.cpi.volts[i] = adc_buffer[i];
     fmcw_process(&ctx);
 
@@ -34,7 +34,7 @@ int main(int argc, char *argv[])
   }
   dt = elapsed_milliseconds() - dt;
 
-  LOG_FMT(INFO, "Processed %llu frames in %.3f ms", n, dt);
+  LOG_FMT(INFO, "Processed %zu frames in %.3f ms", n, dt);
 
   fclose(data);
 

@@ -6,7 +6,7 @@
 
 void fmcw_cpi_init(fmcw_cpi_t *cpi, size_t chirp_size, size_t cpi_size)
 {
-  LOG_FMT(TRACE, "Initialising CPI (%llu, %llu)", chirp_size, cpi_size);
+  LOG_FMT(TRACE, "Initialising CPI (%zu, %zu)", chirp_size, cpi_size);
   cpi->chirp_size      = chirp_size;
   cpi->cpi_size        = cpi_size;
   cpi->buffer_size     = chirp_size * cpi_size;
@@ -40,7 +40,7 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size, size_t cpi_size)
   LOG(TRACE, "Initialising fast-time FFT plan...");
   int nfast[] = {chirp_size};
   ctx->fast_time = fftw_plan_many_dft_r2c(
-    1,        // rank, we are performing only 1D transforms along each row
+    1,        // rank, we are performing 1D transforms along each row
     nfast,    // length of 1D transforms = number of columns (range bins)
     cpi_size, // number of 1D transforms = number of rows (chirps)
     ctx->cpi.volts,         // input array
@@ -57,16 +57,16 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size, size_t cpi_size)
   LOG(TRACE, "Initialising slow-time FFT plan...");
   int nslow[] = {cpi_size}; 
   ctx->slow_time = fftw_plan_many_dft(
-    1,              // rank, we are performing only 1D transforms along each col
-    nslow,          // length of 1D transforms = number of rows (chirps)
-    chirp_size / 2, // number of 1D transforms = number of columns (range bins)
+    1,               // rank, we are performing 1D transforms along each column
+    nslow,           // length of 1D transforms = number of rows (chirps)
+    ctx->cpi.n_bins, // number of 1D transforms = number of columns (range bins)
     ctx->cpi.freq_spectrum, // input array
     NULL,                   // unused, for FFT'ing subarrays
-    chirp_size / 2,         // distance between elements in each input column
+    ctx->cpi.n_bins,        // distance between elements in each input column
     1,                      // distance between each transform input (column)
     ctx->cpi.range_doppler, // output array
     NULL,                   // unused, for FFT'ing subarrays
-    chirp_size / 2,         // distance between elements in each output column
+    ctx->cpi.n_bins,        // distance between elements in each output column
     1,                      // distance between each transform output (column)
     FFTW_FORWARD,					  // forward transform
     FFTW_MEASURE            // optimise plan by profiling several FFTs
@@ -113,7 +113,7 @@ void fmcw_process(fmcw_context_t *ctx)
                             - 3
                             - 10 * log10(50)
                             + 30
-                            - 20 * log10(ctx->cpi.chirp_size / 2);
+                            - 20 * log10(ctx->cpi.n_bins);
 
   // Slow-time corrections:
   //  -  coherentgain (window gain correction)
