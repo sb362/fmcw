@@ -1,7 +1,8 @@
 CC     := clang
 EXE    := fmcw.exe
-SRCS   := src/main.c src/fmcw.c src/util.c src/window.c
-HDRS   := src/fmcw.h src/util.h src/window.h
+SRCS   := src/main.c
+SRCS   += src/fmcw.c src/daq.c src/util.c src/window.c
+HDRS   := src/fmcw.h src/daq.h src/util.h src/window.h
 LIBS   := -lfftw3 -lpthread
 
 CFLAGS := -Iinclude/ -Isrc/ -std=c11 -Wall -Wextra -pedantic -Llib/
