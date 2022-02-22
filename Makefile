@@ -6,9 +6,13 @@ HDRS   := src/fmcw.h src/daq.h src/util.h src/window.h
 LIBS   := -lfftw3 -lpthread
 
 CFLAGS := -Iinclude/ -Isrc/ -std=c11 -Wall -Wextra -pedantic -Llib/
+CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
+CFLAGS += -Wno-deprecated-declarations
+
+CFLAGS += -DFAKE_DAQ
+
 CFLAGS += -g
 #CFLAGS += -O3 -flto
-CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
 
 ifeq ($(OS),Windows_NT)
 	DEFS   += -DWIN32_LEAN_AND_MEAN

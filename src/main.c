@@ -1,5 +1,6 @@
 #include "fmcw.h"
 #include "util.h"
+#include "window.h"
 
 #include <stdio.h>
 
@@ -12,7 +13,7 @@ int main(int argc, char *argv[])
   timer_init();
 
   fmcw_context_t ctx;
-  fmcw_context_init(&ctx, 2048, 64);
+  fmcw_context_init(&ctx, 2048, 64, NO_WINDOW);
 
   uint16_t *adc_buffer = aligned_malloc(ctx.cpi.buffer_size * sizeof(uint16_t));
   

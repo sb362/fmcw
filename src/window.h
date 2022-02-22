@@ -18,7 +18,7 @@ typedef struct
   size_t size;
 } win_table_t;
 
-void init_window_table(win_table_t *tbl, win_type_t type, size_t size);
-void destroy_window_table(win_table_t *tbl)
+void win_table_init(win_table_t *tbl, win_type_t type, size_t size);
+void win_table_free(win_table_t *tbl);
 
 #endif // WINDOW_H

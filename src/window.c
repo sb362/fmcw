@@ -3,7 +3,7 @@
 
 #include <math.h>
 
-void init_window_table(win_table_t *tbl, win_type_t type, size_t size)
+void win_table_init(win_table_t *tbl, win_type_t type, size_t size)
 {
   tbl->size = size;
   tbl->coherent_gain = 0.;
@@ -13,7 +13,7 @@ void init_window_table(win_table_t *tbl, win_type_t type, size_t size)
     tbl->factors[i] = 0.;
 }
 
-void destroy_window_table(win_table_t *tbl)
+void win_table_free(win_table_t *tbl)
 {
   aligned_free(tbl->factors);
   tbl->factors = NULL;

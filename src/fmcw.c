@@ -74,8 +74,8 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
   );
 
   LOG(TRACE, "Initialising window tables...");
-  init_window_table(&ctx->fast_win, win_type, ctx->cpi.chirp_size);
-  init_window_table(&ctx->slow_win, win_type, ctx->cpi.cpi_size);
+  win_table_init(&ctx->fast_win, win_type, ctx->cpi.chirp_size);
+  win_table_init(&ctx->slow_win, win_type, ctx->cpi.cpi_size);
 }
 
 void fmcw_context_destroy(fmcw_context_t *ctx)
@@ -83,8 +83,8 @@ void fmcw_context_destroy(fmcw_context_t *ctx)
   fftw_destroy_plan(ctx->fast_time);
   fftw_destroy_plan(ctx->slow_time);
   fmcw_cpi_destroy(&ctx->cpi);
-  destroy_window_table(&ctx->fast_win);
-  destroy_window_table(&ctx->slow_win);
+  win_table_free(&ctx->fast_win);
+  win_table_free(&ctx->slow_win);
 }
 
 void fmcw_process(fmcw_context_t *ctx)
