@@ -6,6 +6,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef M_PI
+#define M_PI   3.14159265358979323846264338327950288
+#endif
+#define M_2PI  6.2831853071795864769252867665590058
+
 #define SIZEOF_ARRAY(array) ((sizeof (array)) / (sizeof (array)[0]))
 
 #ifndef LOG_LEVEL
