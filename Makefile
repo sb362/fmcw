@@ -9,13 +9,14 @@ CFLAGS := -Iinclude/ -Isrc/ -std=c11 -Wall -Wextra -pedantic -Llib/
 CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
 CFLAGS += -Wno-deprecated-declarations
 
-CFLAGS += -DFAKE_DAQ
+#CFLAGS += -DFAKE_DAQ
+LIBS    += -lWD-Dask64
 
 CFLAGS += -g
 #CFLAGS += -O3 -flto
 
 ifeq ($(OS),Windows_NT)
-	DEFS   += -DWIN32_LEAN_AND_MEAN
+	CFLAGS += -DWIN32_LEAN_AND_MEAN
 else
 	LIBS   += -lm
 	CFLAGS += -pthread
@@ -28,10 +29,10 @@ LDLIBS := $(LIBS)
 src/%.o: src/%.c
 
 %.o: %.c $(DEPS)
-	$(CC) -c $< -o $@ $(CFLAGS) $(DEFS) $(LIBS)
+	$(CC) -c $< -o $@ $(CFLAGS) $(LIBS)
 
 $(EXE): $(OBJS) $(HDRS)
-	$(CC) $(OBJS) -o $@ $(CFLAGS) $(DEFS) $(LIBS) $(LDFLAGS)
+	$(CC) $(OBJS) -o $@ $(CFLAGS) $(LIBS) $(LDFLAGS)
 
 .PHONY: clean
 clean:

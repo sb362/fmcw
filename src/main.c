@@ -1,6 +1,10 @@
+#include "daq.h"
 #include "fmcw.h"
 #include "util.h"
 #include "window.h"
+
+#include <Windows.h>
+#include "Wd-dask64.h"
 
 #include <stdio.h>
 
@@ -8,38 +12,60 @@
 //#include <pthread.h>
 //#undef __MINGW32__
 
+void *acquisition_thread(void *arg);
+
 int main(int argc, char *argv[])
 {
   timer_init();
 
+  (void)acquisition_thread(NULL);
+
+  return 0;
+}
+
+void *acquisition_thread(void *arg)
+{
+  const size_t chirp_size = 2048, cpi_size = 64;
+  const size_t buffer_size = chirp_size * cpi_size;
+
+  daq_t *daq = daq_init(0x14, 0);
+
   fmcw_context_t ctx;
-  fmcw_context_init(&ctx, 2048, 64, NO_WINDOW);
+  fmcw_context_init(&ctx, chirp_size, cpi_size, BLACKMAN_HARRIS_WINDOW);
 
-  uint16_t *adc_buffer = aligned_malloc(ctx.cpi.buffer_size * sizeof(uint16_t));
-  
-  size_t read;
-  FILE *data = fopen("data/test.dat", "rb");
-  
-  size_t n = 0;
-  double dt = elapsed_milliseconds();
-  while ((read = fread(adc_buffer,
-                       sizeof(uint16_t),
-                       ctx.cpi.buffer_size,
-                       data)) > 0)
+  uint16_t *adc_buffer = aligned_malloc(buffer_size * sizeof(uint16_t) * 2);
+  uint16_t *buffers[] = {&adc_buffer[0], &adc_buffer[buffer_size]};
+
+  // Acquire first chunk
+  double dt_a = elapsed_milliseconds();
+  daq_acquire(daq, buffers[0], chirp_size, cpi_size, true);
+
+  for (int i = 0; ; i ^= 1)
   {
-    for (size_t i = 0; i < ctx.cpi.buffer_size; ++i)
-      ctx.cpi.volts[i] = adc_buffer[i];
+    // Await last chunk
+    daq_await(daq);
+
+    dt_a = elapsed_milliseconds() - dt_a;
+    LOG_FMT(DEBUG, "Acquisition took %.2f ms", dt_a);
+    LOG_FMT(DEBUG, "%d", buffers[i][1234]);
+
+    // Request next chunk
+    dt_a = elapsed_milliseconds();
+    daq_acquire(daq, buffers[i ^ 1], chirp_size, cpi_size, true);
+
+    // Process first
+    double dt_p = elapsed_milliseconds();
+    for (int j = 0; j < buffer_size; ++j)
+    {
+      ctx.cpi.volts[j] = buffers[i][j];
+    }
     fmcw_process(&ctx);
-
-    ++n;
+    dt_p = elapsed_milliseconds() - dt_p;
+    LOG_FMT(DEBUG, "Processing took %.2f ms", dt_p);
   }
-  dt = elapsed_milliseconds() - dt;
-
-  LOG_FMT(INFO, "Processed %zu frames in %.3f ms", n, dt);
-
-  fclose(data);
 
   aligned_free(adc_buffer);
   fmcw_context_destroy(&ctx);
-  return 0;
+
+  return NULL;
 }

@@ -92,49 +92,69 @@ void fmcw_process(fmcw_context_t *ctx)
   double dt = elapsed_milliseconds();
 
   LOG(TRACE, "Fast-time windowing...");
-  for (size_t chirp = 0; chirp < ctx->cpi.cpi_size; ++chirp)
-    {}
+  for (size_t i = 0; i < ctx->cpi.cpi_size; ++i)
+  {
+    double *chirp = &ctx->cpi.volts[i];
+    for (size_t j = 0; j < ctx->cpi.chirp_size; ++j)
+    {
+      chirp[j] *= ctx->fast_win.factors[j];
+    }
+  }
   
   LOG(TRACE, "Fast-time FFT...");
   fftw_execute(ctx->fast_time);
 
   LOG(TRACE, "Slow-time windowing...");
-  for (size_t bin = 0; bin < ctx->cpi.n_bins; ++bin)
-    {}
+  for (size_t i = 0; i < ctx->cpi.cpi_size; ++i)
+  {
+    double factor = ctx->slow_win.factors[i];
+    for (size_t j = 0; j < ctx->cpi.n_bins; ++j)
+    {
+      size_t k = i * ctx->cpi.n_bins + j;
+      ctx->cpi.freq_spectrum[k][0] *= factor;
+      ctx->cpi.freq_spectrum[k][1] *= factor;
+    }
+  }
  
   LOG(TRACE, "Slow-time FFT...");
   fftw_execute(ctx->slow_time);
 
   // Fast-time corrections:
-  //  -  coherentgain (window gain correction)
-  //  -  -3  dB       (peak-peak to RMS)
-  //  -  +50 Ohm      (RF)
-  //  -  +30          (dB -> dBm)
-  //  -  +1/sqrt(N/2) (FFT is unnormalised)
-  double fast_correction_db = //window_constants.coherentgain
+  //  -  +30           (dB -> dBm)
+  //  -  coherent gain (window gain correction)
+  //  -  -3  dB        (peak-peak to RMS)
+  //  -  +50 Ohm       (RF)
+  //  -  +1/sqrt(N/2)  (FFT is unnormalised)
+  double fast_correction_db = 30
+                            - 20 * log10(ctx->fast_win.coherent_gain)
                             - 3
                             - 10 * log10(50)
-                            + 30
                             - 20 * log10(ctx->cpi.n_bins);
 
   // Slow-time corrections:
-  //  -  coherentgain (window gain correction)
-  //  -  1/sqrt(M)    (FFT is unnormalised)
+  //  -  coherent gain (window gain correction)
+  //  -  1/sqrt(M)     (FFT is unnormalised)
   double slow_correction_db = fast_correction_db
-                            //window_constants.coherentgain
+                            - 20 * log10(ctx->slow_win.coherent_gain)
                             - 20 * log10(ctx->cpi.cpi_size);
 
   LOG(TRACE, "Applying corrections...");
   for (size_t i = 0; i < ctx->cpi.fbuffer_size; ++i)
   {
-    double re = ctx->cpi.freq_spectrum[i][0];
-    double im = ctx->cpi.freq_spectrum[i][1];
-    ctx->cpi.power_spectrum_dbm[i]  = 20 * log10(re * re + im * im);
+    double re, im, m;
+
+    // Fast-time in dBm + corrections
+    re = ctx->cpi.freq_spectrum[i][0];
+    im = ctx->cpi.freq_spectrum[i][1];
+    m = re * re + im * im;
+    ctx->cpi.power_spectrum_dbm[i]  = m > 0 ? (20 * log10(m)) : -123;
     ctx->cpi.power_spectrum_dbm[i] += fast_correction_db;
 
+    // Slow-time in dBm + corrections
     re = ctx->cpi.range_doppler[i][0];
     im = ctx->cpi.range_doppler[i][1];
-    ctx->cpi.range_doppler_dbm[i]  = 20 * log10(re * re + im * im);
+    m = re * re + im * im;
+    ctx->cpi.range_doppler_dbm[i]  = m > 0 ? (20 * log10(m)) : -123;
     ctx->cpi.range_doppler_dbm[i] += slow_correction_db;
   }
 
