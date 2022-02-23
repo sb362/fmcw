@@ -40,6 +40,9 @@ void *acquisition_thread(void *arg)
   double dt_a = elapsed_milliseconds();
   daq_acquire(daq, buffers[0], chirp_size, cpi_size, true);
 
+  double total_time = 0.;
+  size_t total_frames = 0.;
+
   for (int i = 0; ; i ^= 1)
   {
     // Await last chunk
@@ -62,7 +65,17 @@ void *acquisition_thread(void *arg)
     fmcw_process(&ctx);
     dt_p = elapsed_milliseconds() - dt_p;
     LOG_FMT(DEBUG, "Processing took %.2f ms", dt_p);
+
+    total_time += dt_p;
+    total_frames += 1;
+
+    if (total_frames == 1000)
+      break;
   }
+
+  printf("%zu samples in %.3f ms, avg: %.3f\n",
+         total_frames, total_time,
+         total_time / total_frames);
 
   aligned_free(adc_buffer);
   fmcw_context_destroy(&ctx);

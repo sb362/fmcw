@@ -54,6 +54,7 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
     chirp_size / 2,         // distance between each transform output (row)
     FFTW_MEASURE            // optimise plan by profiling several FFTs
   );
+  // chirp size / 2 or chirp size / 2 + 1?
 
   LOG(TRACE, "Initialising slow-time FFT plan...");
   int nslow[] = {cpi_size}; 
