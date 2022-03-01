@@ -34,25 +34,20 @@ extern const char *log_level_strs[];
 
 #define LOG(lvl, msg)                                            \
   do {                                                           \
-    if (lvl <= LOG_LEVEL)                                        \
-      fprintf(stdout, "%s %s:%d " msg "\n", log_level_strs[lvl], \
-              __FUNCTION__, __LINE__);                           \
+    if (lvl <= LOG_LEVEL) {                                      \
+      fprintf(stdout, "%s %s:%d %s\n", log_level_strs[lvl],      \
+              __FUNCTION__, __LINE__, msg);                      \
       fflush(stdout);                                            \
+    }                                                            \
   } while (0)
 
 #define LOG_FMT(lvl, fmt, ...)                                   \
   do {                                                           \
-    if (lvl <= LOG_LEVEL)                                        \
+    if (lvl <= LOG_LEVEL) {                                      \
       fprintf(stdout, "%s %s:%d " fmt "\n", log_level_strs[lvl], \
               __FUNCTION__, __LINE__, __VA_ARGS__);              \
       fflush(stdout);                                            \
-  } while (0)
-
-#define FATAL_ERROR(title, fmt, ...)                                \
-  do {                                                              \
-    fprintf(stderr, "%s %s:%d " fmt "\n", log_level_strs[FATAL],    \
-            __FUNCTION__, __LINE__, __VA_ARGS__);                   \
-    fflush(stderr);                                                 \
+    }                                                            \
   } while (0)
 
 void timer_init(void);
