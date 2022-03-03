@@ -14,8 +14,9 @@
      /* Panels and Controls: */
 
 #define  PANEL_OUT                        1
-#define  PANEL_OUT_RANGE_DOPPLER          2       /* control type: graph, callback function: (none) */
-#define  PANEL_OUT_POWER_SPECT            3       /* control type: graph, callback function: (none) */
+#define  PANEL_OUT_RANGE_TIME             2       /* control type: graph, callback function: (none) */
+#define  PANEL_OUT_RANGE_DOPPLER          3       /* control type: graph, callback function: (none) */
+#define  PANEL_OUT_POWER_SPECT            4       /* control type: graph, callback function: (none) */
 
 
      /* Control Arrays: */
