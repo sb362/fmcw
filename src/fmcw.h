@@ -21,7 +21,7 @@ struct fmcw_cpi
   fftw_complex *range_doppler;      // Result of slow-time FFT
   double       *range_doppler_dbm;  // Slow-time FFT magnitude relative to 1 mW
 
-  double       *velocity_spectrum;  //
+  double *range; // Frequency/range spectrum
 };
 
 typedef struct fmcw_context fmcw_context_t;

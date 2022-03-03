@@ -1,4 +1,8 @@
 #include "ringbuffer.h"
 
-struct 
+struct ring_buffer_t
+{
+	size_t head, tail;
+	double *buffer;
+};
 
