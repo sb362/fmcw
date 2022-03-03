@@ -13,6 +13,7 @@ daq    := no
 
 ifeq ($(daq),no)
 	CFLAGS += -DFAKE_DAQ
+else
 	LIBS   += -lWD-Dask64
 endif
 
