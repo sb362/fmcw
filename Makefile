@@ -1,26 +1,42 @@
-CC     := clang
-EXE    := fmcw.exe
+EXE    := fmcw
 SRCS   := src/main.c
 SRCS   += src/fmcw.c src/daq.c src/util.c src/window.c
 HDRS   := src/fmcw.h src/daq.h src/util.h src/window.h
-LIBS   := -lfftw3 -lpthread
 
-CFLAGS := -Iinclude/ -Isrc/ -std=c11 -Wall -Wextra -pedantic -Llib/
+CFLAGS := -Iinclude/ -Isrc/ -Llib/ -std=c11 -Wall -Wextra -pedantic
 CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
-CFLAGS += -Wno-deprecated-declarations
 
-#CFLAGS += -DFAKE_DAQ
-LIBS    += -lWD-Dask64
+LIBS   := -lfftw3
 
-CFLAGS += -g
-#CFLAGS += -O3 -flto
+debug  := yes
+daq    := no
+
+ifeq ($(daq),no)
+	CFLAGS += -DFAKE_DAQ
+	LIBS   += -lWD-Dask64
+endif
+
+ifeq ($(debug),yes)
+	CFLAGS += -DLOG_LEVEL=DEBUG -g
+else
+	CFLAGS += -DLOG_LEVEL=FATAL -O3
+endif
 
 ifeq ($(OS),Windows_NT)
+	CFLAGS += -Iinclude/pthreads4w/
+	LIBS   += -lpthreadVC3
+
+	CFLAGS += -Wno-deprecated-declarations
 	CFLAGS += -DWIN32_LEAN_AND_MEAN
+	EXE    := $(EXE).exe
 else
-	LIBS   += -lm
 	CFLAGS += -pthread
+	LIBS   += -lm -lpthread
 endif
+
+$(info OS:         $(OS))
+$(info Compiler:   $(CC))
+$(info Executable: $(EXE))
 
 OBJS   := $(addsuffix .o,$(basename $(SRCS)))
 DEPS   := $(OBJS:.o=.d)
