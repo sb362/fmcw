@@ -9,8 +9,14 @@ typedef struct daq_t daq_t;
 daq_t *daq_init(uint16_t card_type, uint16_t card_num);
 void daq_destroy(daq_t *daq);
 
-// daq_acquire() blocks until the card has acquired *trig_count* triggers each
-// containing *samples_per_trig* samples.
+// Set the DAQ channel number. For WD-DASK, -1 -> all channels
+int daq_set_channel(daq_t *daq, int channel);
+
+// daq_acquire() initiates the acquisition of *trig_count* triggers each
+// containing *samples_per_trig* samples. If *async* is true, then
+// this is an asynchronous operation and you should use daq_await()
+// to test if the acquisition is complete. If *async* is false, then this
+// function will block until the acquisition is complete.
 // *buffer* should be allocated by aligned_malloc().
 // Returns a positive integer indicating how many samples were acquired,
 // or a negative integer if the acquisition failed.
@@ -20,6 +26,7 @@ int daq_acquire(daq_t *daq,
                 uint32_t trig_count,
                 bool async);
 
+// Blocks until the previous asynchronous operation is complete.
 int daq_await(daq_t *daq);
 
 #endif // DAQ_H

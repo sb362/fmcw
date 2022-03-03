@@ -39,11 +39,8 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
     return NULL;
   }
 
-  if ((err = WD_AI_CH_Config(daq->card_id, All_Channels, AD_B_1_V)))
+  if (daq_set_channel(daq, 0))
   {
-    LOG_FMT(FATAL,
-            "WD_AI_CH_Config returned %d (card id=%d)",
-            err, daq->card_id);
     free(daq);
     return NULL;
   }
@@ -71,6 +68,22 @@ void daq_destroy(daq_t *daq)
   WD_AI_ContBufferReset(daq->card_id);
   WD_Release_Card(daq->card_id);
   free(daq);
+}
+
+int daq_set_channel(daq_t *daq, int channel)
+{
+  LOG_FMT(DEBUG, "Setting WD card channel to %d", channel);
+
+  int16_t err;
+  if ((err = WD_AI_CH_Config(daq->card_id, channel, AD_B_1_V)))
+  {
+    LOG_FMT(FATAL,
+            "WD_AI_CH_Config returned %d (card id=%d)",
+            err, daq->card_id);
+    return -1;
+  }
+
+  return 0;
 }
 
 int daq_acquire(daq_t *daq, uint16_t *buffer,
