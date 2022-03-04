@@ -13,17 +13,18 @@ struct fmcw_cpi
          cpi_size,     // Number of chirps in each CPI
          buffer_size,  // Total number of samples in each CPI
          n_bins,       // Number of range bins (= chirp_size / 2 + 1)
-         fbuffer_size; // = num_bins * cpi_size
+         fbuffer_size; // = n_bins * cpi_size
 
   double       *volts;              // Voltages calculated from ADC integers
   fftw_complex *freq_spectrum;      // Result of fast-time FFT
-  double       *power_spectrum_dbm; // Fast-time FFT magnitude relative to 1 mW
+  double       *power_spectrum_dbm; // Fast-time FFT mag sqr'd relative to 1 mW
   fftw_complex *range_doppler;      // Result of slow-time FFT
-  double       *range_doppler_dbm;  // Slow-time FFT magnitude relative to 1 mW
+  double       *range_doppler_dbm;  // Slow-time FFT mag sqr'd relative to 1 mW
 
   double *range; // Frequency/range spectrum
 };
 
+// Contains FFTW plans, precomputed window tables, and the current CPI.
 typedef struct fmcw_context fmcw_context_t;
 struct fmcw_context
 {
