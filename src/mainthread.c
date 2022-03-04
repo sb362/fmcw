@@ -36,7 +36,7 @@ void start_main_thread(daq_t *daq, options_t *options)
   main_thread.stop = false;
   main_thread.running = true;
 
-	pthread_create(&main_thread.th, NULL, main_thread_routine, NULL);
+	pthread_create(&main_thread.th, NULL, main_thread_routine, &main_thread);
 }
 
 void stop_main_thread()
@@ -58,7 +58,7 @@ void stop_main_thread()
 void *main_thread_routine(void *arg)
 {
   thread_t *this_thread = arg;
-  options_t *options = &this_thread->options;
+  options_t *options = this_thread->options;
   daq_t *daq = this_thread->daq;
 
   const size_t buffer_size  = options->proc.chirp_size * options->proc.cpi_size;
