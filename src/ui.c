@@ -91,6 +91,8 @@ int ui_init()
 
   DisplayPanel(ui_handles.ctrl_panel);
   DisplayPanel(ui_handles.out_panel);
+
+  return 0;
 }
 
 
