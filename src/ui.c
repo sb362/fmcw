@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "util.h"
+#include "main.h"
 
 #include <userint.h>
 
@@ -139,33 +140,4 @@ void ui_plot_frame(const fmcw_context_t *ctx)
                       VAL_BLACK,
                       SIZEOF_ARRAY(intensity_colour_map),
                       1, 0);
-}
-
-int CVICALLBACK ui_value_changed(int panel, int control, int event, void *arg,
-                                 int event_arg1, int event_arg2)
-{
-  switch (control)
-  {
-  case PANEL_CTRL_DAQ_SWITCH:
-    break;
-  case PANEL_CTRL_TX_SWITCH:
-    break;
-  // Range
-  case PANEL_CTRL_BANDWIDTH:
-    break;
-  case PANEL_CTRL_RANGE_RES:
-    break;
-  // Velocity
-  case PANEL_CTRL_CPI_LEN:
-    break;
-  case PANEL_CTRL_VELOCITY_RES:
-    break;
-  // Averaging
-  case PANEL_CTRL_AVG_COUNT:
-    break;
-  case PANEL_CTRL_AVG_TIME:
-    break;
-  }
-
-  return 0;
 }
