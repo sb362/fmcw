@@ -176,6 +176,11 @@ void daq_destroy(daq_t *daq)
   free(daq);
 }
 
+int daq_set_channel(daq_t *daq, int channel)
+{
+  return 0;
+}
+
 int daq_acquire(daq_t *daq, uint16_t *buffer,
                 uint32_t samples_per_trig,
                 uint32_t trig_count,
