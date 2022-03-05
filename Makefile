@@ -1,7 +1,7 @@
 EXE    := fmcw
 SRCS   := src/main.c
-SRCS   += src/fmcw.c src/daq.c src/util.c src/window.c src/ui-fake.c src/mainthread.c
-HDRS   := src/fmcw.h src/daq.h src/util.h src/window.h src/mainthread.h
+SRCS   += src/fmcw.c src/daq.c src/util.c src/window.c src/thread.c src/ui-fake.c
+HDRS   := src/fmcw.h src/daq.h src/util.h src/window.h src/thread.h
 
 CFLAGS := -Iinclude/ -Isrc/ -Llib/ -std=c11 -Wall -Wextra -pedantic
 CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
@@ -18,7 +18,7 @@ else
 endif
 
 ifeq ($(debug),yes)
-	CFLAGS += -DLOG_LEVEL=DEBUG -g
+	CFLAGS += -DLOG_LEVEL=TRACE -g
 else
 	CFLAGS += -DLOG_LEVEL=FATAL -O3
 endif
