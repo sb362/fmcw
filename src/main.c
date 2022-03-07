@@ -16,7 +16,7 @@ typedef struct
 
 void main_thread_routine(thread_t *, void *);
 thread_t *main_thread;
-arg_t main_thread_arg;
+arg_t main_thread_arg; // todo: pass this to ui_event via arg instead
 
 int main(int argc, char *argv[])
 {
@@ -30,13 +30,16 @@ int main(int argc, char *argv[])
       .window_type = NO_WINDOW
     },
     .dds = {.chirp_duration = 153, .chirp_start = 398.75, .chirp_end = 401.25},
-    .log = {.path = ""}
+    .log = {.path = ""},
+    .daq = {.channel = 1}
   };
 
   main_thread_arg.daq = daq;
   main_thread_arg.options = &options;
 
   main_thread = thread_init(&main_thread_routine, &main_thread_arg);
+
+  ui_init();
   int status = ui_main_loop();
 
   thread_stop(main_thread);
@@ -98,7 +101,7 @@ void main_thread_routine(thread_t *this_thread, void *arg)
                          ctx.cpi.cpi_size * frame_size,
                          true) <= 0;
 
-    // Process next frame
+    // Process current frame
     for (size_t j = 0; j < frame_size; ++j)
     {
       for (size_t k = 0; k < ctx.cpi.buffer_size; ++k)
@@ -122,23 +125,29 @@ void main_thread_routine(thread_t *this_thread, void *arg)
 #include "controlpanel.h"
 #include "outputpanel.h"
 
-int CVICALLBACK ui_value_changed(int panel, int control, int event, void *arg,
-                                 int event_arg1, int event_arg2)
+int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
+                         int event_arg1, int event_arg2)
 {
   if (event != EVENT_COMMIT)
-    return;
+    return 0;
 
-  options_t options;
-  int start = 0;
+  LOG_FMT(DEBUG, "panel = %d, control = %d, event = %d, arg1 = %d, arg2 = %d",
+          panel, control, event, event_arg1, event_arg2);
 
-  if (panel == PANEL_CTRL)
+  options_t options = *main_thread_arg.options;
+
+  bool is_running = !thread_is_idle(main_thread);
+  int start_scan = is_running, continuous = 0;
+  GetCtrlVal(panel, PANEL_OUT_DAQ_CONT_SWITCH, &continuous);
+
+  if (panel == ui_handles.ctrl_panel)
   {
     switch (control)
     {
     case PANEL_CTRL_TX_SWITCH:
       int enable;
       GetCtrlVal(panel, control, &enable);
-
+      SetCtrlVal(panel, PANEL_CTRL_TX_LED, enable);
       break;
     case PANEL_CTRL_DAQ_CHANNEL:
       GetCtrlVal(panel, control, &options.daq.channel);
@@ -169,34 +178,45 @@ int CVICALLBACK ui_value_changed(int panel, int control, int event, void *arg,
       break;
     }
   }
-  else if (panel == PANEL_OUT)
+  else if (panel == ui_handles.out_panel)
   {
     switch (control)
     {
     case PANEL_OUT_DAQ_CONT_SWITCH:
-      int enable;
-      GetCtrlVal(panel, control, &enable);
-
+      SetCtrlVal(panel, PANEL_OUT_DAQ_LED, continuous);
       break;
     case PANEL_OUT_DAQ_SCAN:
-      GetCtrlVal(panel, control, &start);
+      start_scan = 1;
       break;
     case PANEL_OUT_WINDOW_TYPE:
       int type;
       GetCtrlVal(panel, control, &type);
-
+      options.proc.window_type = (win_type_t)type;
       break;
     default:
       break;
     }
   }
 
-  thread_stop(main_thread);
-  thread_wait_until_idle(main_thread);
-  memcpy(main_thread_arg.options, &options, sizeof(options_t));
+  LOG_FMT(DEBUG, "start_scan = %d, continuous = %d, is_running = %d", start_scan, continuous, is_running);
+  
+  if (is_running)
+  {
+    thread_stop(main_thread);
+    thread_wait_until_idle(main_thread);
+  }
 
-  if (start)
+  *main_thread_arg.options = options;
+
+  if (start_scan)
+  {
     thread_start(main_thread);
+    
+    // Immediately send stop signal.
+    // main thread should exit after first iteration
+    if (!continuous)
+      thread_stop(main_thread);
+  }
 
   return 0;
 }

@@ -3,6 +3,12 @@
 
 #include "fmcw.h"
 
+typedef struct
+{
+  int out_panel, ctrl_panel;
+} ui_handles_t;
+ui_handles_t ui_handles;
+
 int ui_init(void);
 void ui_cleanup(void);
 
