@@ -23,7 +23,7 @@
 
 enum LogLevel
 {
-  FATAL,
+  ERROR,
   WARN,
   INFO,
   DEBUG,

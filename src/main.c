@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     },
     .dds = {.chirp_duration = 153, .chirp_start = 398.75, .chirp_end = 401.25},
     .log = {.path = ""},
-    .daq = {.channel = 1}
+    .daq = {.channel = 0}
   };
 
   main_thread_arg.daq = daq;

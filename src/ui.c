@@ -18,7 +18,7 @@ int ui_init()
   ui_handles.ctrl_panel = LoadPanel(0, "controlpanel.uir", PANEL_CTRL);
   if (ui_handles.ctrl_panel <= 0)
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "Failed to load control panel. Error code: %d",
             ui_handles.ctrl_panel);
     return -1;
@@ -27,7 +27,7 @@ int ui_init()
   ui_handles.out_panel = LoadPanel(0, "outputpanel.uir", PANEL_OUT);
   if (ui_handles.out_panel <= 0)
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "Failed to load output panel. Error code: %d",
             ui_handles.out_panel);
     return -1;

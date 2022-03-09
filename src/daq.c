@@ -13,6 +13,7 @@
 struct daq_t
 {
   uint16_t card_id;
+  int channel;
 };
 
 daq_t *daq_init(uint16_t card_type, uint16_t card_num)
@@ -20,7 +21,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
   daq_t *daq = malloc(sizeof(daq_t));
   if ((daq->card_id = WD_Register_Card(card_type, card_num)) < 0)
   {
-    LOG_FMT(FATAL, "Device not found",
+    LOG_FMT(ERROR, "Device not found",
                    "Failed to register card type=%d num=%d. Error code: %d",
                    card_type, card_num, daq->card_id);
     free(daq);
@@ -32,7 +33,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
   int16_t err;
   if ((err = WD_AD_Auto_Calibration_ALL(daq->card_id)))
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "WD_AD_Auto_Calibration_ALL returned %d (card id=%d)",
             err, daq->card_id);
     free(daq);
@@ -41,6 +42,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
 
   if (daq_set_channel(daq, 0))
   {
+    LOG_FMT(ERROR, "Failed to set DAQ channel");
     free(daq);
     return NULL;
   }
@@ -52,7 +54,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
                           FALSE,
                           TRUE)))
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "WD_AI_Config returned %d (card id=%d)",
             err, daq->card_id);
     free(daq);
@@ -73,11 +75,12 @@ void daq_destroy(daq_t *daq)
 int daq_set_channel(daq_t *daq, int channel)
 {
   LOG_FMT(DEBUG, "Setting WD card channel to %d", channel);
-
+  daq->channel = channel;
+  
   int16_t err;
   if ((err = WD_AI_CH_Config(daq->card_id, channel, AD_B_1_V)))
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "WD_AI_CH_Config returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
@@ -86,8 +89,10 @@ int daq_set_channel(daq_t *daq, int channel)
   return 0;
 }
 
-int daq_acquire(daq_t *daq, uint16_t *buffer,
-                uint32_t samples_per_trig, uint32_t trig_count,
+int daq_acquire(daq_t *daq,
+                uint16_t *buffer,
+                uint32_t samples_per_trig,
+                uint32_t trig_count,
                 bool async)
 {
   uint16_t buffer_id;
@@ -101,7 +106,7 @@ int daq_acquire(daq_t *daq, uint16_t *buffer,
                                0, 0., 0, 0, 0,
                                trig_count)))
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "WD_AI_Trig_Config returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
@@ -112,21 +117,21 @@ int daq_acquire(daq_t *daq, uint16_t *buffer,
                                    buffer_size,
                                    &buffer_id)))
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "WD_AI_ContBufferSetup returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
   }
 
   if ((err = WD_AI_ContScanChannels(daq->card_id,
-                                    0,
+                                    daq->channel,
                                     buffer_id,
                                     buffer_size,
                                     SCAN_INTERVAL,
                                     SCAN_INTERVAL,
                                     async ? ASYNCH_OP : SYNCH_OP)))
   {
-    LOG_FMT(FATAL,
+    LOG_FMT(ERROR,
             "WD_AI_ContScanChannels returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
@@ -162,7 +167,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
   daq->file = fopen(path, "rb");
   if (daq->file == NULL)
   {
-    LOG_FMT(FATAL, "Unable to open '%s'", path);
+    LOG_FMT(ERROR, "Unable to open '%s'", path);
     free(daq);
     return NULL;
   }
@@ -181,7 +186,8 @@ int daq_set_channel(daq_t *daq, int channel)
   return 0;
 }
 
-int daq_acquire(daq_t *daq, uint16_t *buffer,
+int daq_acquire(daq_t *daq,
+                uint16_t *buffer,
                 uint32_t samples_per_trig,
                 uint32_t trig_count,
                 bool async)
