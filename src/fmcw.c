@@ -19,6 +19,12 @@ void fmcw_cpi_init(fmcw_cpi_t *cpi, size_t chirp_size, size_t cpi_size)
   cpi->power_spectrum_dbm = aligned_malloc(re * cpi->fbuffer_size);
   cpi->range_doppler      = aligned_malloc(cx * cpi->fbuffer_size);
   cpi->range_doppler_dbm  = aligned_malloc(re * cpi->fbuffer_size);
+  
+  cpi->range = malloc(cpi->n_bins * re);
+  
+  double fstep = 13.3333333 / (2 * cpi->n_bins); // MHz
+  for (size_t i = 0; i < cpi->n_bins; ++i)
+    cpi->range[i] = i * fstep;
 }
 
 void fmcw_cpi_destroy(fmcw_cpi_t *cpi)
@@ -28,6 +34,7 @@ void fmcw_cpi_destroy(fmcw_cpi_t *cpi)
   aligned_free(cpi->power_spectrum_dbm);
   aligned_free(cpi->range_doppler);
   aligned_free(cpi->range_doppler_dbm);
+  free(cpi->range);
 }
 
 void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
@@ -76,14 +83,6 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
   LOG(TRACE, "Initialising window tables...");
   win_table_init(&ctx->fast_win, win_type, ctx->cpi.chirp_size);
   win_table_init(&ctx->slow_win, win_type, ctx->cpi.cpi_size);
-
-  ctx->cpi.range = malloc(ctx->cpi.n_bins * sizeof(double));
-
-  double fstep = 13.3333333 / ctx->cpi.n_bins; // MHz
-  for (size_t i = 0; i < ctx->cpi.n_bins; ++i)
-  {
-    ctx->cpi.range[i] = i * fstep;
-  }
 }
 
 void fmcw_context_destroy(fmcw_context_t *ctx)
@@ -93,8 +92,6 @@ void fmcw_context_destroy(fmcw_context_t *ctx)
   fmcw_cpi_destroy(&ctx->cpi);
   win_table_free(&ctx->fast_win);
   win_table_free(&ctx->slow_win);
-
-  free(ctx->cpi.range);
 }
 
 void fmcw_process(fmcw_context_t *ctx)
@@ -112,6 +109,31 @@ void fmcw_process(fmcw_context_t *ctx)
   // Fast-time FFT
   fftw_execute(ctx->fast_time);
 
+  // Fast-time corrections:
+  //  -  +30           (dB -> dBm)
+  //  -  coherent gain (window gain correction)
+  //  -  -3  dB        (peak-peak to RMS)
+  //  -  +50 Ohm       (RF)
+  //  -  +1/sqrt(N/2)  (FFT is unnormalised)
+  double fast_correction_db = 30
+                            - 20 * log10(ctx->fast_win.coherent_gain)
+                            - 3
+                            - 10 * log10(50)
+                            - 20 * log10(ctx->cpi.n_bins)
+                            - 20 * log10(32768);
+
+  for (size_t i = 0; i < ctx->cpi.fbuffer_size; ++i)
+  {
+    double re = ctx->cpi.freq_spectrum[i][0];
+    double im = ctx->cpi.freq_spectrum[i][1];
+    double m2 = re * re + im * im;
+
+    if (m2 > 0)
+      ctx->cpi.power_spectrum_dbm[i] = 10 * log10(m2) + fast_correction_db;
+    else
+      ctx->cpi.power_spectrum_dbm[i] = -123;
+  }
+
   // Slow-time windowing
   for (size_t i = 0; i < ctx->cpi.cpi_size; ++i)
   {
@@ -127,47 +149,28 @@ void fmcw_process(fmcw_context_t *ctx)
   // Slow-time FFT
   fftw_execute(ctx->slow_time);
 
-  // Fast-time corrections:
-  //  -  +30           (dB -> dBm)
-  //  -  coherent gain (window gain correction)
-  //  -  -3  dB        (peak-peak to RMS)
-  //  -  +50 Ohm       (RF)
-  //  -  +1/sqrt(N/2)  (FFT is unnormalised)
-  double fast_correction_db = 30
-                            - 20 * log10(ctx->fast_win.coherent_gain)
-                            - 3
-                            - 10 * log10(50)
-                            - 20 * log10(ctx->cpi.n_bins)
-                            - 20 * log10(32768);
-
-  // Slow-time corrections:
+  // Slow-time corrections + transpose:
   //  -  coherent gain (window gain correction)
   //  -  1/sqrt(M)     (FFT is unnormalised)
   double slow_correction_db = fast_correction_db
                             - 20 * log10(ctx->slow_win.coherent_gain)
                             - 20 * log10(ctx->cpi.cpi_size);
 
-  for (size_t i = 0; i < ctx->cpi.fbuffer_size; ++i)
+  for (size_t i = 0; i < ctx->cpi.cpi_size; ++i)
   {
-    double re, im, m2;
+    for (size_t j = 0; j < ctx->cpi.n_bins; ++j)
+    {
+      size_t k = i * ctx->cpi.n_bins + j;
 
-    // Fast-time in dBm + corrections
-    re = ctx->cpi.freq_spectrum[i][0];
-    im = ctx->cpi.freq_spectrum[i][1];
-    m2 = re * re + im * im;
-    if (m2 > 0)
-      ctx->cpi.power_spectrum_dbm[i] = 10 * log10(m2) + fast_correction_db;
-    else
-      ctx->cpi.power_spectrum_dbm[i] = -123;
+      double re = ctx->cpi.range_doppler[i][0];
+      double im = ctx->cpi.range_doppler[i][1];
+      double m2 = re * re + im * im;
 
-    // Slow-time in dBm + corrections
-    re = ctx->cpi.range_doppler[i][0];
-    im = ctx->cpi.range_doppler[i][1];
-    m2 = re * re + im * im;
-
-    if (m2 > 0)
-      ctx->cpi.range_doppler_dbm[i] = 10 * log10(m2) + slow_correction_db;
-    else
-      ctx->cpi.range_doppler_dbm[i] = -123;
+      size_t l = j * ctx->cpi.cpi_size + i;
+      if (m2 > 0)
+        ctx->cpi.range_doppler_dbm[l] = 10 * log10(m2) + slow_correction_db;
+      else
+        ctx->cpi.range_doppler_dbm[l] = -123;
+    }
   }
 }

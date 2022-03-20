@@ -3,7 +3,7 @@
 #include <fftw3.h>
 
 const char *log_level_strs[] = {
-  "FATAL", "WARN ", "INFO ", "DEBUG", "TRACE"
+  "ERROR", "WARN ", "INFO ", "DEBUG", "TRACE"
 };
 
 #ifdef _WIN32

@@ -13,12 +13,11 @@
 struct daq_t
 {
   uint16_t card_id;
-  int channel;
 };
 
 daq_t *daq_init(uint16_t card_type, uint16_t card_num)
 {
-  daq_t *daq = malloc(sizeof(daq_t));
+  daq_t *daq = safe_malloc(sizeof(daq_t));
   if ((daq->card_id = WD_Register_Card(card_type, card_num)) < 0)
   {
     LOG_FMT(ERROR, "Device not found",
@@ -40,13 +39,6 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
     return NULL;
   }
 
-  if (daq_set_channel(daq, 0))
-  {
-    LOG_FMT(ERROR, "Failed to set DAQ channel");
-    free(daq);
-    return NULL;
-  }
-
   if ((err = WD_AI_Config(daq->card_id,
                           WD_ExtTimeBase,
                           TRUE,
@@ -56,6 +48,15 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
   {
     LOG_FMT(ERROR,
             "WD_AI_Config returned %d (card id=%d)",
+            err, daq->card_id);
+    free(daq);
+    return NULL;
+  }
+
+  if ((err = WD_AI_CH_Config(daq->card_id, All_Channels, AD_B_1_V)))
+  {
+    LOG_FMT(ERROR,
+            "WD_AI_CH_Config returned %d (card id=%d)",
             err, daq->card_id);
     free(daq);
     return NULL;
@@ -72,31 +73,15 @@ void daq_destroy(daq_t *daq)
   free(daq);
 }
 
-int daq_set_channel(daq_t *daq, int channel)
-{
-  LOG_FMT(DEBUG, "Setting WD card channel to %d", channel);
-  daq->channel = channel;
-  
-  int16_t err;
-  if ((err = WD_AI_CH_Config(daq->card_id, channel, AD_B_1_V)))
-  {
-    LOG_FMT(ERROR,
-            "WD_AI_CH_Config returned %d (card id=%d)",
-            err, daq->card_id);
-    return -1;
-  }
-
-  return 0;
-}
-
 int daq_acquire(daq_t *daq,
+                uint16_t channel,
                 uint16_t *buffer,
                 uint32_t samples_per_trig,
                 uint32_t trig_count,
                 bool async)
 {
-  uint16_t buffer_id;
   int16_t err;
+  uint16_t buffer_id;
   uint32_t buffer_size = samples_per_trig * trig_count;
 
   if ((err = WD_AI_Trig_Config(daq->card_id,
@@ -123,16 +108,16 @@ int daq_acquire(daq_t *daq,
     return -1;
   }
 
-  if ((err = WD_AI_ContScanChannels(daq->card_id,
-                                    daq->channel,
-                                    buffer_id,
-                                    buffer_size,
-                                    SCAN_INTERVAL,
-                                    SCAN_INTERVAL,
-                                    async ? ASYNCH_OP : SYNCH_OP)))
+  if ((err = WD_AI_ContReadChannel(daq->card_id,
+                                   channel,
+                                   buffer_id,
+                                   buffer_size,
+                                   SCAN_INTERVAL,
+                                   SCAN_INTERVAL,
+                                   async ? ASYNCH_OP : SYNCH_OP)))
   {
     LOG_FMT(ERROR,
-            "WD_AI_ContScanChannels returned %d (card id=%d)",
+            "WD_AI_ContReadChannel returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
   }
@@ -140,14 +125,13 @@ int daq_acquire(daq_t *daq,
   return buffer_size;
 }
 
-int daq_await(daq_t *daq)
+int daq_ready(daq_t *daq)
 {
   BOOLEAN ready;
-  uint32_t count, start_pos;
-  do { WD_AI_AsyncCheck(daq->card_id, &ready, &count); } while (!ready);
-  WD_AI_AsyncClear(daq->card_id, &start_pos, &count);
+  uint32_t count;
+  WD_AI_AsyncCheck(daq->card_id, &ready, &count);
 
-  return count;
+  return ready;
 }
 
 #else
@@ -160,7 +144,7 @@ struct daq_t
 
 daq_t *daq_init(uint16_t card_type, uint16_t card_num)
 {
-  daq_t *daq = malloc(sizeof(daq_t));
+  daq_t *daq = safe_malloc(sizeof(daq_t));
 
   const char *path = "data/test.dat";
 
@@ -181,12 +165,8 @@ void daq_destroy(daq_t *daq)
   free(daq);
 }
 
-int daq_set_channel(daq_t *daq, int channel)
-{
-  return 0;
-}
-
 int daq_acquire(daq_t *daq,
+                uint16_t channel,
                 uint16_t *buffer,
                 uint32_t samples_per_trig,
                 uint32_t trig_count,
@@ -200,9 +180,14 @@ int daq_acquire(daq_t *daq,
   return read;
 }
 
-int daq_await(daq_t *daq)
+int daq_ready(daq_t *daq)
 {
-  return 0;
+  return 1;
 }
 
 #endif // FAKE_DAQ
+
+void daq_await(daq_t *daq)
+{
+  for (; !daq_ready(daq); ) {}
+}

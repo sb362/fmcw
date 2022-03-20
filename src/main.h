@@ -1,6 +1,7 @@
 #ifndef MAIN_H
 #define MAIN_H
 
+#include "daq.h"
 #include "window.h"
 
 typedef struct
@@ -36,5 +37,11 @@ typedef struct
   log_options_t log;
   daq_options_t daq;
 } options_t;
+
+typedef struct
+{
+  daq_t *daq;
+  options_t *options;
+} main_thread_arg_t;
 
 #endif

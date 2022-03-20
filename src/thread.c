@@ -58,7 +58,7 @@ void *thread_loop(void *arg)
 
 thread_t *thread_init(thread_task_t task, void *arg)
 {
-	thread_t *th = malloc(sizeof(thread_t));
+	thread_t *th = safe_malloc(sizeof(thread_t));
 	th->task = task;
 	th->task_arg = arg;
 
@@ -113,6 +113,11 @@ void thread_set_task_arg(thread_t *th, void *arg)
 	pthread_mutex_lock(&th->mutex);
 	th->task_arg = arg;
 	pthread_mutex_unlock(&th->mutex);
+}
+
+void *thread_get_task_arg(thread_t *th)
+{
+	return th->task_arg;
 }
 
 bool thread_is_idle(thread_t *th)

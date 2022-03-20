@@ -7,16 +7,13 @@
 #include "main.h"
 
 #include <stdio.h>
+#include <time.h>
 
-typedef struct
-{
-  daq_t *daq;
-  options_t *options;
-} arg_t;
+// For debugging
+#include <userint.h>
+#include "outputpanel.h"
 
 void main_thread_routine(thread_t *, void *);
-thread_t *main_thread;
-arg_t main_thread_arg; // todo: pass this to ui_event via arg instead
 
 int main(int argc, char *argv[])
 {
@@ -34,12 +31,13 @@ int main(int argc, char *argv[])
     .daq = {.channel = 0}
   };
 
+  main_thread_arg_t main_thread_arg;
   main_thread_arg.daq = daq;
   main_thread_arg.options = &options;
 
-  main_thread = thread_init(&main_thread_routine, &main_thread_arg);
+  thread_t *main_thread = thread_init(&main_thread_routine, &main_thread_arg);
 
-  ui_init();
+  ui_init(main_thread);
   int status = ui_main_loop();
 
   thread_stop(main_thread);
@@ -52,17 +50,13 @@ int main(int argc, char *argv[])
 }
 
 // The main acquisition/processing routine.
-void main_thread_routine(thread_t *this_thread, void *arg)
+void main_thread_routine(thread_t *this_thread, void *th_arg)
 {
-  daq_t *daq = ((arg_t *)arg)->daq;
-  options_t *options = ((arg_t *)arg)->options;
+  main_thread_arg_t *arg = th_arg;
+  daq_t *daq             = arg->daq;
+  options_t *options     = arg->options;
 
-  if (daq_set_channel(daq, options->daq.channel))
-  {
-    LOG(WARN, "Failed to set DAQ channel");
-    return;
-  }
-
+  const uint16_t channel   = options->daq.channel;
   const size_t frame_size  = options->proc.frame_size;
   const size_t buffer_size = options->proc.chirp_size
                            * options->proc.cpi_size * frame_size;
@@ -75,17 +69,31 @@ void main_thread_routine(thread_t *this_thread, void *arg)
     options->proc.window_type
   );
 
+  fmcw_cpi_t frame;
+  fmcw_cpi_init(&frame, options->proc.chirp_size, options->proc.cpi_size);
+
   uint16_t *adc_buffer = aligned_malloc(buffer_size * sizeof(uint16_t) * 2);
   uint16_t *buffers[] = {&adc_buffer[0], &adc_buffer[buffer_size]};
 
+  time_t t = time(NULL);
+  struct tm *tm_info = localtime(&t);
+
+  char out_file_name[32];
+  strftime(out_file_name, SIZEOF_ARRAY(out_file_name),
+           "%Y-%m-%d_%H-%M-%S_raw.csv", tm_info);
+
+  //FILE *out_file = fopen(out_file_name, "w");
+  FILE *out_file = NULL;
+
   // Acquire first frame
   bool quit = daq_acquire(daq,
+                          channel,
                           buffers[0],
                           ctx.cpi.chirp_size,
                           ctx.cpi.cpi_size * frame_size,
                           true) <= 0;
   
-  for (int i = 0; !quit; i ^= 1)
+  for (int buf_idx = 0; !quit; buf_idx ^= 1)
   {
     // Wait for previous transfer
     daq_await(daq);
@@ -96,129 +104,73 @@ void main_thread_routine(thread_t *this_thread, void *arg)
     // Request next frame
     if (!quit)
       quit = daq_acquire(daq,
-                         buffers[i ^ 1],
+                         channel,
+                         buffers[buf_idx ^ 1],
                          ctx.cpi.chirp_size,
                          ctx.cpi.cpi_size * frame_size,
                          true) <= 0;
 
     // Process current frame
+    double dt = elapsed_milliseconds();
+    memset(frame.power_spectrum_dbm, 0, frame.fbuffer_size * sizeof(double));
+    memset(frame.range_doppler_dbm,  0, frame.fbuffer_size * sizeof(double));
+
     for (size_t j = 0; j < frame_size; ++j)
     {
       for (size_t k = 0; k < ctx.cpi.buffer_size; ++k)
-        ctx.cpi.volts[k] = buffers[i][k] - 32768.;
+        ctx.cpi.volts[k] = buffers[buf_idx][k] - 32768.;
 
       fmcw_process(&ctx);
+
+      for (size_t k = 0; k < frame.fbuffer_size; ++k)
+      {
+        frame.power_spectrum_dbm[k] += ctx.cpi.power_spectrum_dbm[k];
+        frame.range_doppler_dbm [k] += ctx.cpi.range_doppler_dbm [k];
+      }
+    }
+
+    for (size_t j = 0; j < frame.fbuffer_size; ++j)
+    {
+      frame.power_spectrum_dbm[j] /= frame_size;
+      frame.range_doppler_dbm [j] /= frame_size;
+    }
+
+    if (out_file)
+    {
+      char s[16];
+      for (size_t j = 0; j < frame.cpi_size; ++j)
+      {
+        for (size_t k = 0; k < frame.n_bins; ++k)
+        {
+          size_t l = j * frame.n_bins + k;
+          int len = sprintf(s, "%.2f,", frame.range_doppler_dbm[l]);
+          fwrite(s, sizeof(char), len, out_file);
+        }
+
+        fputc('\n', out_file);
+      }
     }
 
     // Plot current results
     ui_clear_plots();
-    ui_plot_frame(&ctx);
+    ui_plot_frame(&frame);
+    
+    PlotY(ui_handles.out_panel,
+         PANEL_OUT_RANGE_TIME,
+         ctx.cpi.volts,
+         ctx.cpi.chirp_size,
+         VAL_DOUBLE,
+         VAL_THIN_LINE, VAL_NO_POINT,
+         VAL_SOLID, 1, VAL_GREEN);
+
+    dt = elapsed_milliseconds() - dt;
+    LOG_FMT(TRACE, "Frame processing time: %.2f ms", dt);
   }
+
+  if (out_file)
+    fclose(out_file);
 
   aligned_free(adc_buffer);
+  fmcw_cpi_destroy(&frame);
   fmcw_context_destroy(&ctx);
 }
-
-#ifdef _CVI_
-#include <userint.h>
-
-#include "controlpanel.h"
-#include "outputpanel.h"
-
-int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
-                         int event_arg1, int event_arg2)
-{
-  if (event != EVENT_COMMIT)
-    return 0;
-
-  LOG_FMT(DEBUG, "panel = %d, control = %d, event = %d, arg1 = %d, arg2 = %d",
-          panel, control, event, event_arg1, event_arg2);
-
-  options_t options = *main_thread_arg.options;
-
-  bool is_running = !thread_is_idle(main_thread);
-  int start_scan = is_running, continuous = 0;
-  GetCtrlVal(panel, PANEL_OUT_DAQ_CONT_SWITCH, &continuous);
-
-  if (panel == ui_handles.ctrl_panel)
-  {
-    switch (control)
-    {
-    case PANEL_CTRL_TX_SWITCH:
-      int enable;
-      GetCtrlVal(panel, control, &enable);
-      SetCtrlVal(panel, PANEL_CTRL_TX_LED, enable);
-      break;
-    case PANEL_CTRL_DAQ_CHANNEL:
-      GetCtrlVal(panel, control, &options.daq.channel);
-      break;
-    // Range
-    case PANEL_CTRL_BANDWIDTH:
-      double bandwidth;
-      GetCtrlVal(panel, control, &bandwidth);
-
-      break;
-    case PANEL_CTRL_RANGE_RES:
-      break;
-    // Velocity
-    case PANEL_CTRL_CPI_LEN:
-      GetCtrlVal(panel, control, &options.proc.cpi_size);
-
-      break;
-    case PANEL_CTRL_VELOCITY_RES:
-      break;
-    // Averaging
-    case PANEL_CTRL_AVG_COUNT:
-      GetCtrlVal(panel, control, &options.proc.frame_size);
-
-      break;
-    case PANEL_CTRL_AVG_TIME:
-      break;
-    default:
-      break;
-    }
-  }
-  else if (panel == ui_handles.out_panel)
-  {
-    switch (control)
-    {
-    case PANEL_OUT_DAQ_CONT_SWITCH:
-      SetCtrlVal(panel, PANEL_OUT_DAQ_LED, continuous);
-      break;
-    case PANEL_OUT_DAQ_SCAN:
-      start_scan = 1;
-      break;
-    case PANEL_OUT_WINDOW_TYPE:
-      int type;
-      GetCtrlVal(panel, control, &type);
-      options.proc.window_type = (win_type_t)type;
-      break;
-    default:
-      break;
-    }
-  }
-
-  LOG_FMT(DEBUG, "start_scan = %d, continuous = %d, is_running = %d", start_scan, continuous, is_running);
-  
-  if (is_running)
-  {
-    thread_stop(main_thread);
-    thread_wait_until_idle(main_thread);
-  }
-
-  *main_thread_arg.options = options;
-
-  if (start_scan)
-  {
-    thread_start(main_thread);
-    
-    // Immediately send stop signal.
-    // main thread should exit after first iteration
-    if (!continuous)
-      thread_stop(main_thread);
-  }
-
-  return 0;
-}
-
-#endif // _CVI_
