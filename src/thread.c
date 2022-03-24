@@ -5,20 +5,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Fix for missing type _int64 under CVI 2019 (clang 3.3)
-#ifdef _CVI_
-#define __MINGW32__
-#endif
-#include <pthread.h>
-#ifdef _CVI_
-#undef __MINGW32__
-#endif
-
 struct thread_t
 {
 	pthread_t thread;
 
-	bool idle, quit, stop;
+	int idle, quit, stop;
 	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 
@@ -33,7 +24,7 @@ void *thread_loop(void *arg)
 	for (;;)
 	{
 		pthread_mutex_lock(&th->mutex);
-		th->idle = true;
+		th->idle = 1;
 
 		LOG_FMT(DEBUG, "(%p) - now idle", (void *)th);
 		pthread_cond_signal(&th->cond);
@@ -62,9 +53,9 @@ thread_t *thread_init(thread_task_t task, void *arg)
 	th->task = task;
 	th->task_arg = arg;
 
-	th->idle = false;
-	th->quit = false;
-	th->stop = false;
+	th->idle = 0;
+	th->quit = 0;
+	th->stop = 0;
 
 	pthread_mutex_init(&th->mutex, NULL);
 	pthread_cond_init(&th->cond, NULL);
@@ -84,8 +75,8 @@ void thread_destroy(thread_t *th)
 	LOG_FMT(DEBUG, "(%p) - destroying thread", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
-	th->idle = false;
-	th->quit = true;
+	th->idle = 0;
+	th->quit = 1;
 	pthread_cond_signal(&th->cond);
 	pthread_mutex_unlock(&th->mutex);
 	pthread_join(th->thread, NULL);
@@ -120,19 +111,19 @@ void *thread_get_task_arg(thread_t *th)
 	return th->task_arg;
 }
 
-bool thread_is_idle(thread_t *th)
+int thread_is_idle(thread_t *th)
 {
 	pthread_mutex_lock(&th->mutex);
-	bool idle = th->idle;
+	int idle = th->idle;
 	pthread_mutex_unlock(&th->mutex);
 
 	return idle;
 }
 
-bool thread_should_stop(thread_t *th)
+int thread_should_stop(thread_t *th)
 {
 	pthread_mutex_lock(&th->mutex);
-	bool stop = th->stop;
+	int stop = th->stop;
 	pthread_mutex_unlock(&th->mutex);
 
 	return stop;
@@ -156,8 +147,8 @@ void thread_start(thread_t *th)
 	LOG_FMT(DEBUG, "(%p) - waking thread", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
-	th->idle = false;
-	th->stop = false;
+	th->idle = 0;
+	th->stop = 0;
 	pthread_cond_signal(&th->cond);
 	pthread_mutex_unlock(&th->mutex);
 }
@@ -167,6 +158,6 @@ void thread_stop(thread_t *th)
 	LOG_FMT(DEBUG, "(%p) - stopping thread", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
-	th->stop = true;
+	th->stop = 1;
 	pthread_mutex_unlock(&th->mutex);
 }

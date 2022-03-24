@@ -1,12 +1,9 @@
 #include "daq.h"
 #include "util.h"
 
-//#define FAKE_DAQ
 #ifndef FAKE_DAQ
 
 #include <Windows.h>
-#include "Wd-dask64.h"
-#include "wddaskex.h"
 
 #define SCAN_INTERVAL 1
 

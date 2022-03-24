@@ -11,6 +11,8 @@
 #endif
 #define M_2PI  6.2831853071795864769252867665590058
 
+#define SPEED_OF_LIGHT 299792458
+
 #define SIZEOF_ARRAY(array) ((sizeof (array)) / (sizeof (array)[0]))
 
 #ifndef LOG_LEVEL

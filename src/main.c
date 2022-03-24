@@ -1,89 +1,59 @@
 #include "daq.h"
 #include "fmcw.h"
+#include "thread.h"
+#include "ui.h"
 #include "util.h"
 #include "window.h"
-#include "ui.h"
-#include "thread.h"
 #include "main.h"
 
 #include <stdio.h>
 #include <time.h>
 
-// For debugging
-#include <userint.h>
-#include "outputpanel.h"
-
-void main_thread_routine(thread_t *, void *);
-
-int main(int argc, char *argv[])
+const options_t default_options =
 {
-  timer_init();
+  .proc = {
+    .chirp_size = 2048, .cpi_size = 64, .frame_size = 1,
+    .window_type = NO_WINDOW
+  },
+  .dds = {.chirp_duration = 153, .chirp_start = 398.75, .chirp_end = 401.25},
+  .log = {.path = ""},
+  .daq = {.channel = 0, .sampling_rate = 13.3333333, .continuous = 0},
 
-  daq_t *daq = daq_init(0x14, 0);
-  options_t options =
-  {
-    .proc = {
-      .chirp_size = 2048, .cpi_size = 64, .frame_size = 1,
-      .window_type = NO_WINDOW
-    },
-    .dds = {.chirp_duration = 153, .chirp_start = 398.75, .chirp_end = 401.25},
-    .log = {.path = ""},
-    .daq = {.channel = 0}
-  };
+  .frequency = 94e9
+};
 
-  main_thread_arg_t main_thread_arg;
-  main_thread_arg.daq = daq;
-  main_thread_arg.options = &options;
+daq_t *daq;
+options_t options;
+pthread_mutex_t options_mutex;
 
-  thread_t *main_thread = thread_init(&main_thread_routine, &main_thread_arg);
-
-  ui_init(main_thread);
-  int status = ui_main_loop();
-
-  thread_stop(main_thread);
-  thread_wait_until_idle(main_thread);
-  thread_destroy(main_thread);
-
-  daq_destroy(daq);
-
-  return status;
-}
+thread_t *main_thread;
 
 // The main acquisition/processing routine.
 void main_thread_routine(thread_t *this_thread, void *th_arg)
 {
-  main_thread_arg_t *arg = th_arg;
-  daq_t *daq             = arg->daq;
-  options_t *options     = arg->options;
+  const size_t frame_size  = options.proc.frame_size;
+  const size_t buffer_size = options.proc.chirp_size
+                           * options.proc.cpi_size * frame_size;
 
-  const uint16_t channel   = options->daq.channel;
-  const size_t frame_size  = options->proc.frame_size;
-  const size_t buffer_size = options->proc.chirp_size
-                           * options->proc.cpi_size * frame_size;
+  size_t doppler_range_bin = options.proc.dopper_range_bin;
+  uint16_t channel         = options.daq.channel;
 
   fmcw_context_t ctx;
   fmcw_context_init(
     &ctx,
-    options->proc.chirp_size,
-    options->proc.cpi_size,
-    options->proc.window_type
+    options.proc.chirp_size,
+    options.proc.cpi_size,
+    options.proc.window_type
   );
 
+  // Contains averaged power spectrum and range-Doppler profiles
   fmcw_cpi_t frame;
-  fmcw_cpi_init(&frame, options->proc.chirp_size, options->proc.cpi_size);
+  fmcw_cpi_init(&frame, options.proc.chirp_size, options.proc.cpi_size);
 
   uint16_t *adc_buffer = aligned_malloc(buffer_size * sizeof(uint16_t) * 2);
   uint16_t *buffers[] = {&adc_buffer[0], &adc_buffer[buffer_size]};
 
-  time_t t = time(NULL);
-  struct tm *tm_info = localtime(&t);
-
-  char out_file_name[32];
-  strftime(out_file_name, SIZEOF_ARRAY(out_file_name),
-           "%Y-%m-%d_%H-%M-%S_raw.csv", tm_info);
-
-  //FILE *out_file = fopen(out_file_name, "w");
-  FILE *out_file = NULL;
+  double doppler_moments[4];
 
   // Acquire first frame
   bool quit = daq_acquire(daq,
@@ -98,8 +68,17 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
     // Wait for previous transfer
     daq_await(daq);
 
-    // Check if we should stop acquiring data
-    quit = thread_should_stop(this_thread);
+    // Check if we should immediately stop
+    if (thread_should_stop(this_thread))
+      break;
+
+    // Check if we should stop acquiring data / options have changed
+    pthread_mutex_lock(options_mutex);
+    quit = !options.daq.continuous;
+
+    doppler_range_bin = options.proc.dopper_range_bin;
+    channel = options.daq.channel;
+    pthread_mutex_unlock(options_mutex);
 
     // Request next frame
     if (!quit)
@@ -112,14 +91,17 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
 
     // Process current frame
     double dt = elapsed_milliseconds();
-    memset(frame.power_spectrum_dbm, 0, frame.fbuffer_size * sizeof(double));
-    memset(frame.range_doppler_dbm,  0, frame.fbuffer_size * sizeof(double));
 
-    for (size_t j = 0; j < frame_size; ++j)
+    fmcw_copy_volts(&ctx, buffers[buf_idx]);
+    fmcw_process(&ctx);
+
+    const size_t fbuffer_bytes = frame.fbuffer_size * sizeof(double);
+    memcpy(frame.power_spectrum_dbm, ctx.cpi.power_spectrum_dbm, fbuffer_bytes);
+    memcpy(frame.range_doppler_dbm,  ctx.cpi.range_doppler_dbm,  fbuffer_bytes);
+
+    for (size_t j = 1; j < frame_size; ++j)
     {
-      for (size_t k = 0; k < ctx.cpi.buffer_size; ++k)
-        ctx.cpi.volts[k] = buffers[buf_idx][k] - 32768.;
-
+      fmcw_copy_volts(&ctx, buffers[buf_idx]);
       fmcw_process(&ctx);
 
       for (size_t k = 0; k < frame.fbuffer_size; ++k)
@@ -135,42 +117,50 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
       frame.range_doppler_dbm [j] /= frame_size;
     }
 
-    if (out_file)
-    {
-      char s[16];
-      for (size_t j = 0; j < frame.cpi_size; ++j)
-      {
-        for (size_t k = 0; k < frame.n_bins; ++k)
-        {
-          size_t l = j * frame.n_bins + k;
-          int len = sprintf(s, "%.2f,", frame.range_doppler_dbm[l]);
-          fwrite(s, sizeof(char), len, out_file);
-        }
-
-        fputc('\n', out_file);
-      }
-    }
+    // Calculate Doppler moments
+    const size_t doppler_idx = doppler_range_bin * frame.cpi_size;
+    double *doppler_spectrum = &frame.range_doppler_dbm[doppler_idx];
+    fmcw_doppler_moments(doppler_spectrum, frame.cpi_size,
+                         doppler_moments, SIZEOF_ARRAY(doppler_moments));
 
     // Plot current results
     ui_clear_plots();
     ui_plot_frame(&frame);
-    
-    PlotY(ui_handles.out_panel,
-         PANEL_OUT_RANGE_TIME,
-         ctx.cpi.volts,
-         ctx.cpi.chirp_size,
-         VAL_DOUBLE,
-         VAL_THIN_LINE, VAL_NO_POINT,
-         VAL_SOLID, 1, VAL_GREEN);
+    ui_plot_doppler_spect(doppler_spectrum, frame.cpi_size,
+                          doppler_moments, SIZEOF_ARRAY(doppler_moments));
 
     dt = elapsed_milliseconds() - dt;
     LOG_FMT(TRACE, "Frame processing time: %.2f ms", dt);
   }
 
-  if (out_file)
-    fclose(out_file);
-
   aligned_free(adc_buffer);
   fmcw_cpi_destroy(&frame);
   fmcw_context_destroy(&ctx);
+}
+
+int main(int argc, char *argv[])
+{
+  timer_init();
+
+  daq = daq_init(DAQ_DEFAULT_CARD_TYPE, 0);
+  if (daq == NULL)
+    return -1;
+
+  options = default_options;
+  main_thread = thread_init(&main_thread_routine, NULL);
+  pthread_mutex_init(&options_mutex, NULL);
+
+  int status = ui_init();
+  if (status == 0)
+    status = ui_main_loop();
+
+  thread_stop(main_thread);
+  thread_wait_until_idle(main_thread);
+  thread_destroy(main_thread);
+
+  daq_destroy(daq);
+
+  pthread_mutex_destroy(&options_mutex);
+
+  return status;
 }

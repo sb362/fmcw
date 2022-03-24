@@ -7,12 +7,19 @@
 #include "controlpanel.h"
 #include "outputpanel.h"
 
+typedef struct
+{
+  int out_panel, ctrl_panel;
+} ui_handles_t;
 ui_handles_t ui_handles;
+
 ColorMapEntry intensity_colour_map[2];
 
-// This is horrible
-thread_t *main_thread;
-main_thread_arg_t *main_thread_arg;
+extern daq_t *daq;
+extern options_t options;
+extern pthread_mutex_t options_mutex;
+
+extern thread_t *main_thread;
 
 int CVICALLBACK ui_quit_event(int panel, int control, int event, void *arg,
                               int event_arg1, int event_arg2)
@@ -29,14 +36,14 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
   if (event != EVENT_COMMIT)
     return 0;
 
-  options_t options = *main_thread_arg->options;
-
   LOG_FMT(DEBUG, "panel = %d, control = %d, event = %d, arg1 = %d, arg2 = %d",
           panel, control, event, event_arg1, event_arg2);
 
-  bool is_running = !thread_is_idle(main_thread);
-  int start_scan = is_running, continuous = 0;
-  GetCtrlVal(panel, PANEL_OUT_DAQ_CONT_SWITCH, &continuous);
+  options_t new_options = options;
+
+  int is_running = !thread_is_idle(main_thread);
+  int needs_restart = 0;
+  int start = 0, continuous = new_options.daq.continuous;
 
   if (panel == ui_handles.ctrl_panel)
   {
@@ -55,22 +62,71 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
       double bandwidth;
       GetCtrlVal(panel, control, &bandwidth);
 
+      unsigned range_res = SPEED_OF_LIGHT / (2 * bandwidth);
+      assert(10 <= range_res && range_res <= 30);
+
+      SetCtrlVal(panel, PANEL_CTRL_RANGE_RES, range_res);
+
+      needs_restart = 1;
       break;
     case PANEL_CTRL_RANGE_RES:
+      unsigned range_res = 0;
+      GetCtrlVal(panel, control, &range_res);
+
+      assert(10 <= range_res && range_res <= 30);
+
+      double bandwidth = SPEED_OF_LIGHT / (2 * range_res);
+      SetCtrlVal(panel, PANEL_CTRL_BANDWIDTH, bandwidth);
+
+      needs_restart = 1;
       break;
     // Velocity
     case PANEL_CTRL_CPI_LEN:
-      GetCtrlVal(panel, control, &options.proc.cpi_size);
+      GetCtrlVal(panel, control, &new_options.proc.cpi_size);
 
+      assert(    new_options.proc.cpi_size >= 64
+              && new_options.proc.cpi_size <= 256);
+
+      needs_restart = 1;
       break;
     case PANEL_CTRL_VELOCITY_RES:
+      double velocity_res;
+      GetCtrlVal(panel, control, &velocity_res);
+      
+      new_options.proc.cpi_size = RADAR_WAVELENGTH
+                                / (2 * velocity_res)
+                                / (new_options.dds.chirp_duration * 1e-6);
+
+      assert(    new_options.proc.cpi_size >= 64
+              && new_options.proc.cpi_size <= 256);
+      
+      SetCtrlVal(panel, PANEL_CTRL_CPI_LEN, new_options.proc.cpi_size);
+
+      needs_restart = 1;
       break;
     // Averaging
     case PANEL_CTRL_AVG_COUNT:
-      GetCtrlVal(panel, control, &options.proc.frame_size);
+      GetCtrlVal(panel, control, &new_options.proc.frame_size);
 
+      assert(    new_options.proc.frame_size >= 64
+              && new_options.proc.frame_size <= 256);
+
+      double frame_time = new_options.dds.chirp_duration
+                        * new_options.proc.cpi_size * 2
+                        * new_options.proc.frame_size;
+
+      needs_restart = 1;
       break;
     case PANEL_CTRL_AVG_TIME:
+      double avg_time;
+      GetCtrlVal(panel, control, &avg_time);
+
+      new_options.proc.frame_size = avg_time
+                                  / (new_options.dds.chirp_duration / 1000)
+                                  / (new_options.proc.cpi_size * 2);
+      SetCtrlVal(panel, PANEL_CTRL_AVG_COUNT, new_options.proc.frame_size);
+
+      needs_restart = 1;
       break;
     default:
       break;
@@ -84,46 +140,37 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
       SetCtrlVal(panel, PANEL_OUT_DAQ_LED, continuous);
       break;
     case PANEL_OUT_DAQ_SCAN:
-      start_scan = 1;
+      start = 1;
       break;
     case PANEL_OUT_WINDOW_TYPE:
       int type;
       GetCtrlVal(panel, control, &type);
       options.proc.window_type = (win_type_t)type;
+
+      needs_restart = 1;
       break;
     default:
       break;
     }
   }
-
-  LOG_FMT(DEBUG, "start_scan = %d, continuous = %d, is_running = %d", start_scan, continuous, is_running);
   
-  if (is_running)
+  if (is_running && needs_restart)
   {
     thread_stop(main_thread);
     thread_wait_until_idle(main_thread);
   }
 
-  *main_thread_arg->options = options;
+  options = new_options;
 
-  if (start_scan)
-  {
+  if (    (is_running && needs_restart && options.daq.continuous)
+       || (start && !is_running))
     thread_start(main_thread);
-    
-    // Immediately send stop signal.
-    // main thread should exit after first iteration
-    if (!continuous)
-      thread_stop(main_thread);
-  }
 
   return 0;
 }
 
-int ui_init(thread_t *th)
+int ui_init()
 {
-  main_thread = th;
-  main_thread_arg = thread_get_task_arg(main_thread);
-
   LOG(DEBUG, "Loading user interface files...");
 
   // Load control panel
@@ -185,24 +232,35 @@ void ui_clear_plots()
                   -1, VAL_DELAYED_DRAW);
 }
 
-void ui_plot_frame(const fmcw_cpi_t *cpi)
+void ui_plot_frame(const fmcw_cpi_t *frame)
 {
-  PlotXY(ui_handles.out_panel,
+  PlotY(ui_handles.out_panel,
          PANEL_OUT_POWER_SPECT,
-         cpi->range,
-         cpi->power_spectrum_dbm,
-         cpi->n_bins,
-         VAL_DOUBLE, VAL_DOUBLE,
+         frame->power_spectrum_dbm,
+         frame->n_bins,
+         VAL_DOUBLE,
          VAL_THIN_LINE, VAL_NO_POINT,
          VAL_SOLID, 1, VAL_GREEN);
   
   PlotScaledIntensity(ui_handles.out_panel,
                       PANEL_OUT_RANGE_DOPPLER,
-                      cpi->range_doppler_dbm,
-                      cpi->cpi_size, cpi->n_bins,
+                      frame->range_doppler_dbm,
+                      frame->cpi_size, frame->n_bins,
                       VAL_DOUBLE, 1, 0, 1, 0,
                       intensity_colour_map,
                       VAL_CYAN,
                       SIZEOF_ARRAY(intensity_colour_map),
                       1, 0);
+}
+
+void ui_plot_doppler_spect(const double *spectrum, size_t size,
+                           const double *moments, size_t nmoments)
+{
+  PlotY(ui_handles.out_panel,
+          PANEL_OUT_DOPPLER_SPECT,
+          spectrum,
+          size,
+          VAL_DOUBLE,
+          VAL_THIN_LINE, VAL_NO_POINT,
+          VAL_SOLID, 1, VAL_GREEN);
 }

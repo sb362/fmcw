@@ -19,12 +19,6 @@ void fmcw_cpi_init(fmcw_cpi_t *cpi, size_t chirp_size, size_t cpi_size)
   cpi->power_spectrum_dbm = aligned_malloc(re * cpi->fbuffer_size);
   cpi->range_doppler      = aligned_malloc(cx * cpi->fbuffer_size);
   cpi->range_doppler_dbm  = aligned_malloc(re * cpi->fbuffer_size);
-  
-  cpi->range = malloc(cpi->n_bins * re);
-  
-  double fstep = 13.3333333 / (2 * cpi->n_bins); // MHz
-  for (size_t i = 0; i < cpi->n_bins; ++i)
-    cpi->range[i] = i * fstep;
 }
 
 void fmcw_cpi_destroy(fmcw_cpi_t *cpi)
@@ -34,7 +28,6 @@ void fmcw_cpi_destroy(fmcw_cpi_t *cpi)
   aligned_free(cpi->power_spectrum_dbm);
   aligned_free(cpi->range_doppler);
   aligned_free(cpi->range_doppler_dbm);
-  free(cpi->range);
 }
 
 void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
@@ -166,11 +159,68 @@ void fmcw_process(fmcw_context_t *ctx)
       double im = ctx->cpi.range_doppler[i][1];
       double m2 = re * re + im * im;
 
+      // Transposed index
       size_t l = j * ctx->cpi.cpi_size + i;
+
+      // Frequency shift
+      if (i < ctx->cpi.cpi_size / 2)
+        l += ctx->cpi.cpi_size / 2;
+      else
+        l -= ctx->cpi.cpi_size / 2;
+
       if (m2 > 0)
         ctx->cpi.range_doppler_dbm[l] = 10 * log10(m2) + slow_correction_db;
       else
         ctx->cpi.range_doppler_dbm[l] = -123;
     }
+  }
+}
+
+void fmcw_copy_volts(fmcw_context_t *ctx, uint16_t *volts)
+{
+  for (size_t i = 0; i < ctx->cpi.buffer_size; ++i)
+    ctx->cpi.volts[i] = volts[i] - 32768.;
+}
+
+
+void fmcw_doppler_moments(double *spectrum, size_t spectrum_size,
+                          double *moments, size_t moments_size)
+{
+  double power[256]; // todo, make MAX_CPI_SIZE or something
+  double total = 0;
+
+  moments[0] = 0; // mean
+  moments[1] = 0; // variance
+  moments[2] = 0; // skew
+  moments[3] = 0; // kurtosis
+
+  // First, convert back to linear
+  for (size_t i = 0; i < spectrum_size; ++i)
+  {
+    power[i] = pow(10, spectrum[i] / 10);
+    total += power[i];
+  }
+
+  for (size_t i = 0; i < spectrum_size; ++i)
+  {
+    power[i] /= total;
+    moments[0] += power[i] * i;
+  }
+  moments[0] /= total;
+
+  for (size_t i = 0; i < spectrum_size; ++i)
+  {
+    moments[1] += power[i] * (i - moments[0]) * (i - moments[0]);
+  }
+  moments[1] /= total;
+
+  double std_dev = sqrt(moments[1]);
+
+  for (size_t n = 2; n < moments_size; ++n)
+  {
+    for (size_t i = 0; i < spectrum_size; ++i)
+      moments[n] += power[i] * pow((i - moments[0]) / std_dev, n + 1);
+
+    moments[n] /= total;
   }
 }
