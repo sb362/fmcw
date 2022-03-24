@@ -51,11 +51,11 @@ double elapsed_milliseconds()
 
 void *safe_malloc(size_t n)
 {
-  LOG_FMT(TRACE, "Allocating %zu bytes", n);
+  LOG_FMT(LVL_TRACE, "Allocating %zu bytes", n);
   void *ptr = malloc(n);
   if (ptr == NULL)
   {
-    LOG_FMT(ERROR, "Failed to allocate %zu bytes of memory", n);
+    LOG_FMT(LVL_ERROR, "Failed to allocate %zu bytes of memory", n);
     exit(1);
   }
 
@@ -64,11 +64,11 @@ void *safe_malloc(size_t n)
 
 void *aligned_malloc(size_t n)
 {
-  LOG_FMT(TRACE, "Allocating %zu bytes", n);
+  LOG_FMT(LVL_TRACE, "Allocating %zu bytes", n);
   void *ptr = fftw_malloc(n);
   if (ptr == NULL)
   {
-    LOG_FMT(ERROR, "Failed to allocate %zu bytes of memory", n);
+    LOG_FMT(LVL_ERROR, "Failed to allocate %zu bytes of memory", n);
     exit(1);
   }
 

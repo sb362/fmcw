@@ -11,26 +11,26 @@
 #endif
 #define M_2PI  6.2831853071795864769252867665590058
 
-#define SPEED_OF_LIGHT 299792458
+#define SPEED_OF_LIGHT 299792458.
 
 #define SIZEOF_ARRAY(array) ((sizeof (array)) / (sizeof (array)[0]))
 
-#ifndef LOG_LEVEL
-#ifdef NDEBUG
-#define LOG_LEVEL FATAL
-#else
-#define LOG_LEVEL DEBUG
-#endif
-#endif
-
 enum LogLevel
 {
-  ERROR,
-  WARN,
-  INFO,
-  DEBUG,
-  TRACE
+  LVL_ERROR,
+  LVL_WARN,
+  LVL_INFO,
+  LVL_DEBUG,
+  LVL_TRACE
 };
+
+#ifndef LOG_LEVEL
+#ifdef NDEBUG
+#define LOG_LEVEL LVL_ERROR
+#else
+#define LOG_LEVEL LVL_DEBUG
+#endif
+#endif
 
 extern const char *log_level_strs[];
 

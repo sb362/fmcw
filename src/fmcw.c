@@ -6,7 +6,8 @@
 
 void fmcw_cpi_init(fmcw_cpi_t *cpi, size_t chirp_size, size_t cpi_size)
 {
-  LOG_FMT(TRACE, "Initialising CPI (%zu, %zu)", chirp_size, cpi_size);
+  LOG_FMT(LVL_TRACE, "Initialising CPI (%zu, %zu)",
+          chirp_size, cpi_size);
   cpi->chirp_size      = chirp_size;
   cpi->cpi_size        = cpi_size;
   cpi->buffer_size     = chirp_size * cpi_size;
@@ -38,7 +39,7 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
   // Details on fftw_plan_many_dft() are available at:
   // https://www.fftw.org/fftw3_doc/Advanced-Complex-DFTs.html
 
-  LOG(TRACE, "Initialising fast-time FFT plan...");
+  LOG(LVL_TRACE, "Initialising fast-time FFT plan...");
   int nfast[] = {chirp_size};
   ctx->fast_time = fftw_plan_many_dft_r2c(
     1,        // rank, we are performing 1D transforms along each row
@@ -55,7 +56,7 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
     FFTW_MEASURE            // optimise plan by profiling several FFTs
   );
 
-  LOG(TRACE, "Initialising slow-time FFT plan...");
+  LOG(LVL_TRACE, "Initialising slow-time FFT plan...");
   int nslow[] = {cpi_size}; 
   ctx->slow_time = fftw_plan_many_dft(
     1,               // rank, we are performing 1D transforms along each column
@@ -73,7 +74,7 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
     FFTW_MEASURE            // optimise plan by profiling several FFTs
   );
 
-  LOG(TRACE, "Initialising window tables...");
+  LOG(LVL_TRACE, "Initialising window tables...");
   win_table_init(&ctx->fast_win, win_type, ctx->cpi.chirp_size);
   win_table_init(&ctx->slow_win, win_type, ctx->cpi.cpi_size);
 }
@@ -155,18 +156,12 @@ void fmcw_process(fmcw_context_t *ctx)
     {
       size_t k = i * ctx->cpi.n_bins + j;
 
-      double re = ctx->cpi.range_doppler[i][0];
-      double im = ctx->cpi.range_doppler[i][1];
+      double re = ctx->cpi.range_doppler[k][0];
+      double im = ctx->cpi.range_doppler[k][1];
       double m2 = re * re + im * im;
 
       // Transposed index
       size_t l = j * ctx->cpi.cpi_size + i;
-
-      // Frequency shift
-      if (i < ctx->cpi.cpi_size / 2)
-        l += ctx->cpi.cpi_size / 2;
-      else
-        l -= ctx->cpi.cpi_size / 2;
 
       if (m2 > 0)
         ctx->cpi.range_doppler_dbm[l] = 10 * log10(m2) + slow_correction_db;
@@ -186,7 +181,7 @@ void fmcw_copy_volts(fmcw_context_t *ctx, uint16_t *volts)
 void fmcw_doppler_moments(double *spectrum, size_t spectrum_size,
                           double *moments, size_t moments_size)
 {
-  double power[256]; // todo, make MAX_CPI_SIZE or something
+  double power[256] = {0}; // todo, make MAX_CPI_SIZE or something
   double total = 0;
 
   moments[0] = 0; // mean

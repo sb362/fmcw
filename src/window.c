@@ -61,7 +61,7 @@ double coherent_gain(win_type_t type)
   case BLACKMAN_WINDOW:
     return 0.42;
   default:
-    LOG_FMT(WARN, "Unknown window type: %d", type);
+    LOG_FMT(LVL_WARN, "Unknown window type: %d", type);
     return 1.;
   }
 }

@@ -26,7 +26,7 @@ void *thread_loop(void *arg)
 		pthread_mutex_lock(&th->mutex);
 		th->idle = 1;
 
-		LOG_FMT(DEBUG, "(%p) - now idle", (void *)th);
+		LOG_FMT(LVL_DEBUG, "(%p) - now idle", (void *)th);
 		pthread_cond_signal(&th->cond);
 
 		while (th->idle)
@@ -40,7 +40,7 @@ void *thread_loop(void *arg)
 
 		pthread_mutex_unlock(&th->mutex);
 
-		LOG_FMT(DEBUG, "(%p) - starting task", (void *)th);
+		LOG_FMT(LVL_DEBUG, "(%p) - starting task", (void *)th);
 		th->task(th, th->task_arg);
 	}
 
@@ -61,7 +61,7 @@ thread_t *thread_init(thread_task_t task, void *arg)
 	pthread_cond_init(&th->cond, NULL);
 	pthread_create(&th->thread, NULL, thread_loop, th);
 
-	LOG_FMT(DEBUG, "(%p) - created new thread", (void *)th);
+	LOG_FMT(LVL_DEBUG, "(%p) - created new thread", (void *)th);
 
 	thread_wait_until_idle(th);
 
@@ -72,7 +72,7 @@ void thread_destroy(thread_t *th)
 {
 	assert(thread_is_idle(th));
 
-	LOG_FMT(DEBUG, "(%p) - destroying thread", (void *)th);
+	LOG_FMT(LVL_DEBUG, "(%p) - destroying thread", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
 	th->idle = 0;
@@ -131,7 +131,7 @@ int thread_should_stop(thread_t *th)
 
 void thread_wait_until_idle(thread_t *th)
 {
-	LOG_FMT(DEBUG, "(%p) - waiting until idle", (void *)th);
+	LOG_FMT(LVL_DEBUG, "(%p) - waiting until idle", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
 	while (!th->idle)
@@ -144,7 +144,7 @@ void thread_start(thread_t *th)
 {
 	assert(thread_is_idle(th));
 
-	LOG_FMT(DEBUG, "(%p) - waking thread", (void *)th);
+	LOG_FMT(LVL_DEBUG, "(%p) - waking thread", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
 	th->idle = 0;
@@ -155,7 +155,7 @@ void thread_start(thread_t *th)
 
 void thread_stop(thread_t *th)
 {
-	LOG_FMT(DEBUG, "(%p) - stopping thread", (void *)th);
+	LOG_FMT(LVL_DEBUG, "(%p) - stopping thread", (void *)th);
 
 	pthread_mutex_lock(&th->mutex);
 	th->stop = 1;

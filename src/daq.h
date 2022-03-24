@@ -30,13 +30,4 @@ void daq_await(daq_t *daq);
 // Returns true if the previous asynchronous input operation is complete.
 int daq_ready(daq_t *daq);
 
-#ifdef FAKE_DAQ
-#include "Wd-dask64.h"
-#include "wddaskex.h"
-
-#define DAQ_DEFAULT_CARD_TYPE PCI_9846D
-#else
-#define DAQ_DEFAULT_CARD_TYPE 0
-#endif
-
 #endif // DAQ_H

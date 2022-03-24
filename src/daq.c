@@ -3,7 +3,15 @@
 
 #ifndef FAKE_DAQ
 
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <Windows.h>
+
+#include "Wd-dask64.h"
+#include "wddaskex.h"
+
+#define DAQ_DEFAULT_CARD_TYPE PCI_9846D
 
 #define SCAN_INTERVAL 1
 
@@ -17,19 +25,19 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
   daq_t *daq = safe_malloc(sizeof(daq_t));
   if ((daq->card_id = WD_Register_Card(card_type, card_num)) < 0)
   {
-    LOG_FMT(ERROR, "Device not found",
-                   "Failed to register card type=%d num=%d. Error code: %d",
-                   card_type, card_num, daq->card_id);
+    LOG_FMT(LVL_ERROR, "Device not found",
+            "Failed to register card type=%d num=%d. Error code: %d",
+            card_type, card_num, daq->card_id);
     free(daq);
     return NULL;
   }
-  LOG_FMT(DEBUG, "WD_Register_Card(%x, %d) returned %d",
+  LOG_FMT(LVL_DEBUG, "WD_Register_Card(%x, %d) returned %d",
           card_type, card_num, daq->card_id);
 
   int16_t err;
   if ((err = WD_AD_Auto_Calibration_ALL(daq->card_id)))
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "WD_AD_Auto_Calibration_ALL returned %d (card id=%d)",
             err, daq->card_id);
     free(daq);
@@ -43,7 +51,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
                           FALSE,
                           TRUE)))
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "WD_AI_Config returned %d (card id=%d)",
             err, daq->card_id);
     free(daq);
@@ -52,7 +60,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
 
   if ((err = WD_AI_CH_Config(daq->card_id, All_Channels, AD_B_1_V)))
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "WD_AI_CH_Config returned %d (card id=%d)",
             err, daq->card_id);
     free(daq);
@@ -64,7 +72,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
 
 void daq_destroy(daq_t *daq)
 {
-  LOG_FMT(DEBUG, "Releasing DAQ card (id=%d)", daq->card_id);
+  LOG_FMT(LVL_DEBUG, "Releasing DAQ card (id=%d)", daq->card_id);
   WD_AI_ContBufferReset(daq->card_id);
   WD_Release_Card(daq->card_id);
   free(daq);
@@ -88,7 +96,7 @@ int daq_acquire(daq_t *daq,
                                0, 0., 0, 0, 0,
                                trig_count)))
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "WD_AI_Trig_Config returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
@@ -99,7 +107,7 @@ int daq_acquire(daq_t *daq,
                                    buffer_size,
                                    &buffer_id)))
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "WD_AI_ContBufferSetup returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
@@ -113,7 +121,7 @@ int daq_acquire(daq_t *daq,
                                    SCAN_INTERVAL,
                                    async ? ASYNCH_OP : SYNCH_OP)))
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "WD_AI_ContReadChannel returned %d (card id=%d)",
             err, daq->card_id);
     return -1;
@@ -148,7 +156,7 @@ daq_t *daq_init(uint16_t card_type, uint16_t card_num)
   daq->file = fopen(path, "rb");
   if (daq->file == NULL)
   {
-    LOG_FMT(ERROR, "Unable to open '%s'", path);
+    LOG_FMT(LVL_ERROR, "Unable to open '%s'", path);
     free(daq);
     return NULL;
   }
@@ -172,7 +180,7 @@ int daq_acquire(daq_t *daq,
   uint32_t buffer_size = samples_per_trig * trig_count;
 
   size_t read = fread(buffer, sizeof(uint16_t), buffer_size, daq->file);
-  LOG_FMT(TRACE, "Read %zu sample(s)", read);
+  LOG_FMT(LVL_TRACE, "Read %zu sample(s)", read);
 
   return read;
 }

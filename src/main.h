@@ -47,6 +47,8 @@ typedef struct
   daq_options_t daq;   // DAQ options
 } options_t;
 
-extern options_t default_options;
+extern const options_t default_options;
+
+void print_options(options_t opts);
 
 #endif

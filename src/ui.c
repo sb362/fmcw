@@ -2,6 +2,8 @@
 #include "util.h"
 #include "main.h"
 
+#include <assert.h>
+
 #include <userint.h>
 
 #include "controlpanel.h"
@@ -36,7 +38,8 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
   if (event != EVENT_COMMIT)
     return 0;
 
-  LOG_FMT(DEBUG, "panel = %d, control = %d, event = %d, arg1 = %d, arg2 = %d",
+  LOG_FMT(LVL_DEBUG,
+          "panel = %d, control = %d, event = %d, arg1 = %d, arg2 = %d",
           panel, control, event, event_arg1, event_arg2);
 
   options_t new_options = options;
@@ -50,15 +53,18 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
     switch (control)
     {
     case PANEL_CTRL_TX_SWITCH:
+    {
       int enable;
       GetCtrlVal(panel, control, &enable);
       SetCtrlVal(panel, PANEL_CTRL_TX_LED, enable);
       break;
+    }
     case PANEL_CTRL_DAQ_CHANNEL:
-      GetCtrlVal(panel, control, &options.daq.channel);
+      GetCtrlVal(panel, control, &new_options.daq.channel);
       break;
     // Range
     case PANEL_CTRL_BANDWIDTH:
+    {
       double bandwidth;
       GetCtrlVal(panel, control, &bandwidth);
 
@@ -69,7 +75,9 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
 
       needs_restart = 1;
       break;
+    }
     case PANEL_CTRL_RANGE_RES:
+    {
       unsigned range_res = 0;
       GetCtrlVal(panel, control, &range_res);
 
@@ -80,6 +88,7 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
 
       needs_restart = 1;
       break;
+    }
     // Velocity
     case PANEL_CTRL_CPI_LEN:
       GetCtrlVal(panel, control, &new_options.proc.cpi_size);
@@ -90,6 +99,7 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
       needs_restart = 1;
       break;
     case PANEL_CTRL_VELOCITY_RES:
+    {
       double velocity_res;
       GetCtrlVal(panel, control, &velocity_res);
       
@@ -104,8 +114,10 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
 
       needs_restart = 1;
       break;
+    }
     // Averaging
     case PANEL_CTRL_AVG_COUNT:
+    {
       GetCtrlVal(panel, control, &new_options.proc.frame_size);
 
       assert(    new_options.proc.frame_size >= 64
@@ -114,10 +126,13 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
       double frame_time = new_options.dds.chirp_duration
                         * new_options.proc.cpi_size * 2
                         * new_options.proc.frame_size;
-
+      SetCtrlVal(panel, PANEL_CTRL_AVG_TIME, frame_time);
+      
       needs_restart = 1;
       break;
+    }
     case PANEL_CTRL_AVG_TIME:
+    {
       double avg_time;
       GetCtrlVal(panel, control, &avg_time);
 
@@ -128,6 +143,7 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
 
       needs_restart = 1;
       break;
+    }
     default:
       break;
     }
@@ -137,7 +153,9 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
     switch (control)
     {
     case PANEL_OUT_DAQ_CONT_SWITCH:
+      GetCtrlVal(panel, control, &continuous);
       SetCtrlVal(panel, PANEL_OUT_DAQ_LED, continuous);
+      new_options.daq.continuous = continuous;
       break;
     case PANEL_OUT_DAQ_SCAN:
       start = 1;
@@ -145,7 +163,7 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
     case PANEL_OUT_WINDOW_TYPE:
       int type;
       GetCtrlVal(panel, control, &type);
-      options.proc.window_type = (win_type_t)type;
+      new_options.proc.window_type = (win_type_t)type;
 
       needs_restart = 1;
       break;
@@ -161,6 +179,8 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
   }
 
   options = new_options;
+  
+  print_options(new_options);
 
   if (    (is_running && needs_restart && options.daq.continuous)
        || (start && !is_running))
@@ -171,13 +191,13 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
 
 int ui_init()
 {
-  LOG(DEBUG, "Loading user interface files...");
+  LOG(LVL_DEBUG, "Loading user interface files...");
 
   // Load control panel
   ui_handles.ctrl_panel = LoadPanel(0, "controlpanel.uir", PANEL_CTRL);
   if (ui_handles.ctrl_panel <= 0)
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "Failed to load control panel. Error code: %d",
             ui_handles.ctrl_panel);
     return -1;
@@ -187,7 +207,7 @@ int ui_init()
   ui_handles.out_panel = LoadPanel(0, "outputpanel.uir", PANEL_OUT);
   if (ui_handles.out_panel <= 0)
   {
-    LOG_FMT(ERROR,
+    LOG_FMT(LVL_ERROR,
             "Failed to load output panel. Error code: %d",
             ui_handles.out_panel);
     return -1;
@@ -202,7 +222,7 @@ int ui_init()
   DisplayPanel(ui_handles.ctrl_panel);
   DisplayPanel(ui_handles.out_panel);
 
-  LOG_FMT(DEBUG, "UI handles: ctrl = %d, out = %d",
+  LOG_FMT(LVL_DEBUG, "UI handles: ctrl = %d, out = %d",
           ui_handles.ctrl_panel, ui_handles.out_panel);
 
   return 0;
@@ -210,14 +230,14 @@ int ui_init()
 
 void ui_cleanup()
 {
-  LOG(DEBUG, "Discarding user interface panels...");
+  LOG(LVL_DEBUG, "Discarding user interface panels...");
   DiscardPanel(ui_handles.ctrl_panel);
   DiscardPanel(ui_handles.out_panel);
 }
 
 int ui_main_loop()
 {
-  LOG(DEBUG, "Entering UI main loop...");
+  LOG(LVL_DEBUG, "Entering UI main loop...");
   return RunUserInterface();
 }
 
@@ -229,6 +249,10 @@ void ui_clear_plots()
   
   DeleteGraphPlot(ui_handles.out_panel,
                   PANEL_OUT_RANGE_DOPPLER,
+                  -1, VAL_DELAYED_DRAW);
+
+  DeleteGraphPlot(ui_handles.out_panel,
+                  PANEL_OUT_DOPPLER_SPECT,
                   -1, VAL_DELAYED_DRAW);
 }
 

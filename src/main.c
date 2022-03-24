@@ -18,8 +18,6 @@ const options_t default_options =
   .dds = {.chirp_duration = 153, .chirp_start = 398.75, .chirp_end = 401.25},
   .log = {.path = ""},
   .daq = {.channel = 0, .sampling_rate = 13.3333333, .continuous = 0},
-
-  .frequency = 94e9
 };
 
 daq_t *daq;
@@ -73,12 +71,12 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
       break;
 
     // Check if we should stop acquiring data / options have changed
-    pthread_mutex_lock(options_mutex);
+    pthread_mutex_lock(&options_mutex);
     quit = !options.daq.continuous;
 
     doppler_range_bin = options.proc.dopper_range_bin;
     channel = options.daq.channel;
-    pthread_mutex_unlock(options_mutex);
+    pthread_mutex_unlock(&options_mutex);
 
     // Request next frame
     if (!quit)
@@ -130,7 +128,7 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
                           doppler_moments, SIZEOF_ARRAY(doppler_moments));
 
     dt = elapsed_milliseconds() - dt;
-    LOG_FMT(TRACE, "Frame processing time: %.2f ms", dt);
+    LOG_FMT(LVL_TRACE, "Frame processing time: %.2f ms", dt);
   }
 
   aligned_free(adc_buffer);
@@ -142,7 +140,7 @@ int main(int argc, char *argv[])
 {
   timer_init();
 
-  daq = daq_init(DAQ_DEFAULT_CARD_TYPE, 0);
+  daq = daq_init(0x14, 0);
   if (daq == NULL)
     return -1;
 
@@ -163,4 +161,35 @@ int main(int argc, char *argv[])
   pthread_mutex_destroy(&options_mutex);
 
   return status;
+}
+
+void print_options(options_t opts)
+{
+  printf(
+    "FMCW Processing options:\n"
+    "  chirp size  = %zu\n"
+    "  CPI   size  = %zu\n"
+    "  frame size  = %zu\n"
+    "  window type = %d\n"
+    "  Doppler range bin = %zu\n",
+    opts.proc.chirp_size, opts.proc.cpi_size,
+    opts.proc.frame_size, opts.proc.window_type,
+    opts.proc.dopper_range_bin
+  );
+  printf(
+    "DDS options:\n"
+    "  chirp start  = %.2f\n"
+    "  chirp end    = %.2f\n"
+    "  chirp time   = %.2f\n",
+    opts.dds.chirp_start, opts.dds.chirp_end,
+    opts.dds.chirp_duration
+  );
+  printf(
+    "DAQ options:\n"
+    "  channel       = %d\n"
+    "  continuous    = %d\n"
+    "  sampling rate = %.2f\n",
+    opts.daq.channel, opts.daq.continuous,
+    opts.daq.sampling_rate
+  );
 }
