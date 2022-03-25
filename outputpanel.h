@@ -23,6 +23,7 @@
 #define  PANEL_OUT_POWER_SPECT            8       /* control type: graph, callback function: (none) */
 #define  PANEL_OUT_DAQ_SCAN               9       /* control type: command, callback function: ui_event */
 #define  PANEL_OUT_BUTTON_QUIT            10      /* control type: command, callback function: ui_quit_event */
+#define  PANEL_OUT_DOPPLER_RANGE_BIN      11      /* control type: numeric, callback function: ui_event */
 
 
      /* Control Arrays: */

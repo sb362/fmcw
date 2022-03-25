@@ -39,7 +39,7 @@ void fmcw_context_init(fmcw_context_t *ctx, size_t chirp_size,
                        size_t cpi_size, win_type_t win_type);
 void fmcw_context_destroy(fmcw_context_t *ctx);
 void fmcw_process(fmcw_context_t *ctx);
-void fmcw_copy_volts(fmcw_context_t *ctx, uint16_t *volts);
+void fmcw_copy_volts(fmcw_context_t *ctx, const uint16_t *volts);
 
 void fmcw_doppler_moments(double *spectrum, size_t spectrum_size,
                           double *moments, size_t moments_size);

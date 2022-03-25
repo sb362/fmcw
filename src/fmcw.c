@@ -171,7 +171,7 @@ void fmcw_process(fmcw_context_t *ctx)
   }
 }
 
-void fmcw_copy_volts(fmcw_context_t *ctx, uint16_t *volts)
+void fmcw_copy_volts(fmcw_context_t *ctx, const uint16_t *volts)
 {
   for (size_t i = 0; i < ctx->cpi.buffer_size; ++i)
     ctx->cpi.volts[i] = volts[i] - 32768.;

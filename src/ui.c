@@ -120,12 +120,12 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
     {
       GetCtrlVal(panel, control, &new_options.proc.frame_size);
 
-      assert(    new_options.proc.frame_size >= 64
+      assert(    new_options.proc.frame_size >= 1
               && new_options.proc.frame_size <= 256);
 
-      double frame_time = new_options.dds.chirp_duration
-                        * new_options.proc.cpi_size * 2
-                        * new_options.proc.frame_size;
+      uint64_t frame_time = new_options.dds.chirp_duration / 1000
+                          * new_options.proc.cpi_size * 2
+                          * new_options.proc.frame_size;
       SetCtrlVal(panel, PANEL_CTRL_AVG_TIME, frame_time);
       
       needs_restart = 1;
@@ -166,6 +166,9 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
       new_options.proc.window_type = (win_type_t)type;
 
       needs_restart = 1;
+      break;
+    case PANEL_OUT_DOPPLER_RANGE_BIN:
+      GetCtrlVal(panel, control, &new_options.proc.dopper_range_bin);
       break;
     default:
       break;
@@ -254,27 +257,41 @@ void ui_clear_plots()
   DeleteGraphPlot(ui_handles.out_panel,
                   PANEL_OUT_DOPPLER_SPECT,
                   -1, VAL_DELAYED_DRAW);
+  
+  DeleteGraphPlot(ui_handles.out_panel,
+                  PANEL_OUT_RANGE_TIME,
+                  -1, VAL_DELAYED_DRAW);
 }
 
-void ui_plot_frame(const fmcw_cpi_t *frame)
+void ui_plot_frame(const fmcw_context_t *ctx,
+                   const double *range_profile, const double *range_doppler)
 {
   PlotY(ui_handles.out_panel,
          PANEL_OUT_POWER_SPECT,
-         frame->power_spectrum_dbm,
-         frame->n_bins,
+         range_profile,
+         ctx->cpi.n_bins,
          VAL_DOUBLE,
          VAL_THIN_LINE, VAL_NO_POINT,
          VAL_SOLID, 1, VAL_GREEN);
   
   PlotScaledIntensity(ui_handles.out_panel,
                       PANEL_OUT_RANGE_DOPPLER,
-                      frame->range_doppler_dbm,
-                      frame->cpi_size, frame->n_bins,
+                      range_doppler,
+                      ctx->cpi.cpi_size,
+                      ctx->cpi.n_bins,
                       VAL_DOUBLE, 1, 0, 1, 0,
                       intensity_colour_map,
                       VAL_CYAN,
                       SIZEOF_ARRAY(intensity_colour_map),
                       1, 0);
+
+  PlotY(ui_handles.out_panel,
+         PANEL_OUT_RANGE_TIME,
+         ctx->cpi.power_spectrum_dbm,
+         ctx->cpi.n_bins,
+         VAL_DOUBLE,
+         VAL_THIN_LINE, VAL_NO_POINT,
+         VAL_SOLID, 1, VAL_GREEN);
 }
 
 void ui_plot_doppler_spect(const double *spectrum, size_t size,
