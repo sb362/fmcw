@@ -30,8 +30,6 @@ thread_t *main_thread;
 void main_thread_routine(thread_t *this_thread, void *th_arg)
 {
   const size_t frame_size  = options.proc.frame_size;
-  const size_t buffer_size = options.proc.chirp_size
-                           * options.proc.cpi_size * frame_size;
 
   size_t doppler_range_bin = options.proc.dopper_range_bin;
   uint16_t channel         = options.daq.channel;
@@ -44,14 +42,23 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
     options.proc.window_type
   );
 
-  // Contains averaged power spectrum and range-Doppler profiles
-  fmcw_cpi_t frame;
-  fmcw_cpi_init(&frame, options.proc.chirp_size, options.proc.cpi_size);
+  // Averaged range profile
+  double *avg_range_profile = aligned_malloc(
+    sizeof(double) * ctx.cpi.n_bins
+  );
+  const size_t fbuffer_bytes = ctx.cpi.fbuffer_size * sizeof(double);
 
-  uint16_t *adc_buffer = aligned_malloc(buffer_size * sizeof(uint16_t) * 2);
-  uint16_t *buffers[] = {&adc_buffer[0], &adc_buffer[buffer_size]};
+  // Averaged range-Doppler matrix
+  double *avg_range_doppler = aligned_malloc(fbuffer_bytes);
 
+  // Doppler moments
   double doppler_moments[4];
+  
+  uint16_t *adc_buffer = aligned_malloc(
+    ctx.cpi.buffer_size * frame_size * sizeof(uint16_t) * 2
+  );
+  uint16_t *buffers[] = {&adc_buffer[0],
+                         &adc_buffer[ctx.cpi.buffer_size * frame_size]};
 
   // Acquire first frame
   bool quit = daq_acquire(daq,
@@ -90,49 +97,50 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
     // Process current frame
     double dt = elapsed_milliseconds();
 
-    fmcw_copy_volts(&ctx, buffers[buf_idx]);
-    fmcw_process(&ctx);
+    memset(avg_range_profile, 0, sizeof(double) * ctx.cpi.n_bins);
+    memset(avg_range_doppler, 0, fbuffer_bytes);
 
-    const size_t fbuffer_bytes = frame.fbuffer_size * sizeof(double);
-    memcpy(frame.power_spectrum_dbm, ctx.cpi.power_spectrum_dbm, fbuffer_bytes);
-    memcpy(frame.range_doppler_dbm,  ctx.cpi.range_doppler_dbm,  fbuffer_bytes);
-
-    for (size_t j = 1; j < frame_size; ++j)
+    for (size_t j = 0; j < frame_size; ++j)
     {
-      fmcw_copy_volts(&ctx, buffers[buf_idx]);
+      fmcw_copy_volts(&ctx, &buffers[buf_idx][j * ctx.cpi.buffer_size]);
       fmcw_process(&ctx);
 
-      for (size_t k = 0; k < frame.fbuffer_size; ++k)
+      for (size_t k = 0; k < ctx.cpi.cpi_size; ++k)
       {
-        frame.power_spectrum_dbm[k] += ctx.cpi.power_spectrum_dbm[k];
-        frame.range_doppler_dbm [k] += ctx.cpi.range_doppler_dbm [k];
+        for (size_t l = 0; l < ctx.cpi.n_bins; ++l)
+        {
+          size_t m = k * ctx.cpi.n_bins + l;
+          avg_range_profile[l] += ctx.cpi.power_spectrum_dbm[m];
+          avg_range_doppler[m] += ctx.cpi.range_doppler_dbm[m];
+        }
       }
     }
-
-    for (size_t j = 0; j < frame.fbuffer_size; ++j)
-    {
-      frame.power_spectrum_dbm[j] /= frame_size;
-      frame.range_doppler_dbm [j] /= frame_size;
-    }
+    
+    for (size_t j = 0; j < ctx.cpi.n_bins; ++j)
+      avg_range_profile[j] /= ctx.cpi.cpi_size * frame_size;
+    
+    for (size_t j = 0; j < ctx.cpi.fbuffer_size; ++j)
+      avg_range_doppler[j] /= frame_size;
 
     // Calculate Doppler moments
-    const size_t doppler_idx = doppler_range_bin * frame.cpi_size;
-    double *doppler_spectrum = &frame.range_doppler_dbm[doppler_idx];
-    fmcw_doppler_moments(doppler_spectrum, frame.cpi_size,
+    const size_t doppler_idx = doppler_range_bin * ctx.cpi.cpi_size;
+    double *doppler_spectrum = &avg_range_doppler[doppler_idx];
+    fmcw_doppler_moments(doppler_spectrum, ctx.cpi.cpi_size,
                          doppler_moments, SIZEOF_ARRAY(doppler_moments));
 
     // Plot current results
     ui_clear_plots();
-    ui_plot_frame(&frame);
-    ui_plot_doppler_spect(doppler_spectrum, frame.cpi_size,
+    ui_plot_frame(&ctx, avg_range_profile, avg_range_doppler);
+    ui_plot_doppler_spect(doppler_spectrum, ctx.cpi.cpi_size,
                           doppler_moments, SIZEOF_ARRAY(doppler_moments));
 
     dt = elapsed_milliseconds() - dt;
     LOG_FMT(LVL_TRACE, "Frame processing time: %.2f ms", dt);
   }
 
+  aligned_free(avg_range_profile);
+  aligned_free(avg_range_doppler);
   aligned_free(adc_buffer);
-  fmcw_cpi_destroy(&frame);
   fmcw_context_destroy(&ctx);
 }
 
