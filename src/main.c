@@ -99,7 +99,7 @@ void main_thread_routine(thread_t *this_thread, void *th_arg)
 
     memset(avg_range_profile, 0, sizeof(double) * ctx.cpi.n_bins);
     memset(avg_range_doppler, 0, fbuffer_bytes);
-
+    
     for (size_t j = 0; j < frame_size; ++j)
     {
       fmcw_copy_volts(&ctx, &buffers[buf_idx][j * ctx.cpi.buffer_size]);

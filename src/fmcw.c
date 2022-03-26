@@ -11,8 +11,8 @@ void fmcw_cpi_init(fmcw_cpi_t *cpi, size_t chirp_size, size_t cpi_size)
   cpi->chirp_size      = chirp_size;
   cpi->cpi_size        = cpi_size;
   cpi->buffer_size     = chirp_size * cpi_size;
-  cpi->n_bins          = chirp_size / 2 + 1;
-  cpi->fbuffer_size    = cpi->n_bins * cpi_size;
+  cpi->n_bins          = chirp_size / 2;
+  cpi->fbuffer_size    = (cpi->n_bins + 1) * cpi_size;
 
   size_t re = sizeof(double), cx = sizeof(fftw_complex);
   cpi->volts              = aligned_malloc(re * cpi-> buffer_size);
