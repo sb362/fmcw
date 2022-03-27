@@ -163,6 +163,11 @@ void fmcw_process(fmcw_context_t *ctx)
       // Transposed index
       size_t l = j * ctx->cpi.cpi_size + i;
 
+      if (i >= (ctx->cpi.cpi_size / 2))
+        l -= ctx->cpi.cpi_size / 2;
+      else
+        l += ctx->cpi.cpi_size / 2;
+
       if (m2 > 0)
         ctx->cpi.range_doppler_dbm[l] = 10 * log10(m2) + slow_correction_db;
       else
