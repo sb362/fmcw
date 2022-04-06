@@ -24,12 +24,15 @@
 #define  PANEL_OUT_DAQ_SCAN               9       /* control type: command, callback function: ui_event */
 #define  PANEL_OUT_BUTTON_QUIT            10      /* control type: command, callback function: ui_quit_event */
 #define  PANEL_OUT_DOPPLER_RANGE_BIN      11      /* control type: numeric, callback function: ui_event */
+#define  PANEL_OUT_DOPPLER_KURTOSIS       12      /* control type: numeric, callback function: (none) */
+#define  PANEL_OUT_DOPPLER_SKEW           13      /* control type: numeric, callback function: (none) */
+#define  PANEL_OUT_DOPPLER_VARIANCE       14      /* control type: numeric, callback function: (none) */
+#define  PANEL_OUT_DOPPLER_MEAN           15      /* control type: numeric, callback function: (none) */
 
 
      /* Control Arrays: */
 
-          /* (no control arrays in the resource file) */
-
+#define  MOMENTS                          1
 
      /* Menu Bars, Menus, and Menu Items: */
 

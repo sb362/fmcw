@@ -183,7 +183,7 @@ int CVICALLBACK ui_event(int panel, int control, int event, void *arg,
 
   options = new_options;
   
-  print_options(new_options);
+  // print_options(new_options);
 
   if (    (is_running && needs_restart && options.daq.continuous)
        || (start && !is_running))
@@ -218,7 +218,7 @@ int ui_init()
 
   // Intensity colour map used in range-Doppler plot
   intensity_colour_map[0].color = 0x000000;
-  intensity_colour_map[0].dataValue.valDouble = -141;
+  intensity_colour_map[0].dataValue.valDouble = -85;
   intensity_colour_map[1].color = 0xffffff;
   intensity_colour_map[1].dataValue.valDouble = -40;  
 
@@ -285,13 +285,13 @@ void ui_plot_frame(const fmcw_context_t *ctx,
                       SIZEOF_ARRAY(intensity_colour_map),
                       1, 0);
 
-  PlotY(ui_handles.out_panel,
+  /*PlotY(ui_handles.out_panel,
          PANEL_OUT_RANGE_TIME,
          ctx->cpi.power_spectrum_dbm,
          ctx->cpi.n_bins,
          VAL_DOUBLE,
          VAL_THIN_LINE, VAL_NO_POINT,
-         VAL_SOLID, 1, VAL_GREEN);
+         VAL_SOLID, 1, VAL_GREEN);*/
 }
 
 void ui_plot_doppler_spect(const double *spectrum, size_t size,
@@ -304,4 +304,8 @@ void ui_plot_doppler_spect(const double *spectrum, size_t size,
           VAL_DOUBLE,
           VAL_THIN_LINE, VAL_NO_POINT,
           VAL_SOLID, 1, VAL_GREEN);
+
+  SetCtrlVal(ui_handles.out_panel, PANEL_OUT_DOPPLER_MEAN,     moments[0]);
+  SetCtrlVal(ui_handles.out_panel, PANEL_OUT_DOPPLER_SKEW,     moments[1]);
+  SetCtrlVal(ui_handles.out_panel, PANEL_OUT_DOPPLER_KURTOSIS, moments[2]);
 }
