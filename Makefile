@@ -9,7 +9,6 @@ CFLAGS += -Wno-unused-parameter -Wno-unused-command-line-argument
 LIBS   := -lfftw3
 
 debug  := yes
-netcdf := no
 daq    := no
 
 ifeq ($(daq),yes)
@@ -22,19 +21,6 @@ ifeq ($(debug),yes)
 	CFLAGS += -DLOG_LEVEL=TRACE -g
 else
 	CFLAGS += -DLOG_LEVEL=FATAL -O3
-endif
-
-ifeq ($(netcdf),yes)
-	CFLAGS += -DUSE_NETCDF
-	SRCS   += src/export.c
-	HDRS   += src/export.h
-
-	ifeq ($(OS),Windows_NT)
-		CFLAGS += -Iinclude/netcdf
-		CFLAGS += -Llib/netcdf/
-	endif
-
-	LIBS += -lnetcdf
 endif
 
 ifeq ($(OS),Windows_NT)
@@ -54,7 +40,6 @@ $(info Compiler:    $(CC))
 $(info Executable:  $(EXE))
 
 $(info Debug build: $(debug))
-$(info Use NetCDF:  $(netcdf))
 $(info WD-Dask:     $(daq))
 
 OBJS   := $(addsuffix .o,$(basename $(SRCS)))
